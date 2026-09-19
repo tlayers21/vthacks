@@ -10,35 +10,14 @@
         </div>
 
         <h1 class="mt-10 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-            Every dollar has
-            <span class="text-brand-ink">one</span> person who owns it.
+            Manage your business's money, 
+            <span class="text-brand-ink">your</span> way.
         </h1>
-        <p class="mt-5 max-w-2xl text-lg text-muted">
-            Employees spend, managers decide, finance funds the departments. Nobody does two of
-            those, and every transfer lands in Capital One&rsquo;s Nessie as the audit trail.
-        </p>
-
-        <div class="mt-12 grid gap-4 sm:grid-cols-3">
-            {% set steps = [
-                ('receipt', 'Employees submit', 'File an expense against the department budget. Nothing is ever refused by the machine.'),
-                ('clock', 'Managers decide', 'One queue, with the rules that flagged each row attached. A rejection carries a reason.'),
-                ('coins', 'Finance funds', 'A department out of budget cannot approve anything until finance tops it up.'),
-            ] %}
-            {% for name, heading, body in steps %}
-                <div class="card">
-                    <span class="grid h-9 w-9 place-items-center rounded-lg bg-brand-soft text-brand-ink">
-                        {{ icon(name, 'nav-icon') }}
-                    </span>
-                    <h2 class="mt-3.5 font-semibold">{{ loop.index }}. {{ heading }}</h2>
-                    <p class="mt-1.5 text-sm text-muted">{{ body }}</p>
-                </div>
-            {% endfor %}
-        </div>
 
         <div class="mt-14">
             <h2 class="text-sm font-semibold tracking-wide text-muted uppercase">Sign in as</h2>
             <p class="mt-1.5 text-sm text-muted">
-                There is no password here &mdash; pick a person and the whole app re-scopes to what
+                Pick a person and the app re-scopes to what
                 their role is allowed to see.
             </p>
 
