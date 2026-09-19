@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run:*)",
+      "Bash(uv add:*)",
+      "Bash(npm run:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "mcp__context7"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Bash(git push --force:*)",
+      "Bash(rm -rf:*)",
+      "Edit(./uv.lock)",
+      "Write(./uv.lock)",
+      "Edit(./.env)",
+      "Write(./.env)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.agents/hooks/format.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
