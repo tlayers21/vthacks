@@ -17,5 +17,9 @@
       "Bash(cd /tmp)",
       "Bash(python \"C:/Users/westo/Documents/VT Work/VTHacks/vthacks/db/init_db.py\")"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "context7"
+  ],
+  "enableAllProjectMcpServers": true
 }
