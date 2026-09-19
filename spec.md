@@ -8,7 +8,7 @@ Not included: inter-company invoices, real authentication (a role switcher is us
 
 ## 1. Roles
 
-| Role | Sees | Can do |
+| Role | Sees | Can do | 
 |---|---|---|
 | Employee | Own expenses, own department's budget totals | Submit expenses, upload receipts |
 | Manager | All expenses in their department | Approve or reject, request budget |
