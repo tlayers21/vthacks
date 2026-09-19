@@ -17,5 +17,13 @@ but not yet built — check that file before assuming a module exists.
 - Run: `uv run python app.py`
 - Format: `uv run ruff format`; lint: `uv run ruff check`
 
+## Libraries & docs
+- Before writing code against any library, framework, or API (Flask, SQLModel, Alembic, httpx,
+  pytest, etc.), fetch current docs via the Context7 MCP server instead of relying on training
+  data — APIs change and memory may be stale.
+- For Nessie (the mock bank API): use `docs/nessie-reference.md` as the source of truth, not
+  Context7 — it isn't indexed there. Nessie mode is controlled by `NESSIE_MODE=real|mock`; only
+  `integrations/nessie/` may call it (see `docs/spec.md` §6).
+
 ## Skills
 - Writing or editing code: read .agents/skills/commenting/SKILL.md
