@@ -344,3 +344,23 @@ def test_preview_matches_submission_without_writing(client, sign_in, db):
     assert [v["rule"] for v in submitted["violations"]] == [
         v["rule"] for v in preview["violations"]
     ]
+
+
+# -- the finance breakdown --------------------------------------------------
+
+
+def test_category_spend_summary_excludes_rejected_and_ranks_by_spend(db):
+    rows = expense_db.category_spend_summary(db)
+    by_category = {row["category"]: row for row in rows}
+
+    # Marketing's three seeded rows total $50,400 and lead the table
+    assert rows[0]["category"] == "marketing"
+    assert by_category["marketing"]["spent_cents"] == 5_040_000
+    assert by_category["marketing"]["expense_count"] == 3
+
+    # Expense 3 (Apple, $6,200) was rejected, so equipment never appears
+    assert "equipment" not in by_category
+
+    committed = sum(row["spent_cents"] for row in rows)
+    departments = expense_db.department_spend_summary(db)
+    assert committed == sum(row["committed_cents"] for row in departments)

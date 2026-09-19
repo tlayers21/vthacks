@@ -65,3 +65,28 @@ def test_role_switch_changes_the_acting_user(client, people):
 
 def test_switching_to_an_unknown_user_is_refused(client):
     assert client.post("/auth/switch", json={"user_id": "nope"}).status_code == 404
+
+
+def test_finance_page_breaks_spend_down_by_category(client, sign_in):
+    sign_in("dana")
+    body = client.get("/finance").get_data(as_text=True)
+    # Marketing is the seeded over-budget category, so it leads the breakdown
+    assert "Spend by category" in body
+    assert "marketing" in body
+
+
+def test_policy_page_marks_a_department_override(client, sign_in):
+    sign_in("marcus")  # Engineering, which overrides the software rule
+    engineering = client.get("/policies?department_id=1").get_data(as_text=True)
+    assert "override" in engineering
+    # Operations has no rule of its own, so nothing is marked
+    assert "override" not in client.get("/policies?department_id=4").get_data(
+        as_text=True
+    )
+
+
+def test_approvals_posts_decisions_to_the_api_route(client, sign_in):
+    """The queue used to POST /expenses/<id>/decision, which 404s -- it must hit /api."""
+    sign_in("priya")
+    body = client.get("/approvals").get_data(as_text=True)
+    assert "/api/expenses/${button.dataset.decide}/decision" in body

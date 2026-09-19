@@ -1,10 +1,72 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, role_badge %}
 {% block title %}Acme spend{% endblock %}
-{% block content %}
-    <h1>Acme spend control</h1>
-    <p>
-        Employees submit expenses, the policy engine decides what happens to each one, and
-        managers only see what the rules could not settle on their own.
-    </p>
-    <p class="muted">Pick someone from &ldquo;Viewing as&rdquo; above to get started.</p>
+
+{% block signed_out %}
+    <div class="mx-auto max-w-5xl px-5 py-14 sm:py-20">
+        <div class="flex items-center gap-2.5">
+            <span class="grid h-9 w-9 place-items-center rounded-lg bg-brand text-white">
+                {{ icon('wallet', 'nav-icon') }}
+            </span>
+            <span class="text-lg font-semibold tracking-tight">Acme spend</span>
+        </div>
+
+        <h1 class="mt-10 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
+            Spend control that decides
+            <span class="text-brand-ink">before</span> anyone asks.
+        </h1>
+        <p class="mt-5 max-w-2xl text-lg text-muted">
+            Employees submit expenses, the policy engine settles what it can, and managers only
+            ever see the handful of things the rules could not decide on their own.
+        </p>
+
+        <div class="mt-12 grid gap-4 sm:grid-cols-3">
+            {% set steps = [
+                ('receipt', 'Submit', 'An employee files an expense and sees the policy verdict live, before they ever press send.'),
+                ('shield', 'The engine decides', 'Per-expense caps, auto-approve thresholds and the department budget all run on every submission.'),
+                ('clock', 'A human, only if needed', 'Auto-approved expenses pay out immediately. Everything else lands in one manager queue with its reasons attached.'),
+            ] %}
+            {% for name, heading, body in steps %}
+                <div class="card">
+                    <span class="grid h-9 w-9 place-items-center rounded-lg bg-brand-soft text-brand-ink">
+                        {{ icon(name, 'nav-icon') }}
+                    </span>
+                    <h2 class="mt-3.5 font-semibold">{{ loop.index }}. {{ heading }}</h2>
+                    <p class="mt-1.5 text-sm text-muted">{{ body }}</p>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="mt-14">
+            <h2 class="text-sm font-semibold tracking-wide text-muted uppercase">Sign in as</h2>
+            <p class="mt-1.5 text-sm text-muted">
+                There is no password here &mdash; pick a person and the whole app re-scopes to what
+                their role is allowed to see.
+            </p>
+
+            <div class="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {% for user in switchable_users %}
+                    <form method="post" action="/auth/switch">
+                        <input type="hidden" name="user_id" value="{{ user.nessie_id }}">
+                        <input type="hidden" name="next" value="/">
+                        <button type="submit"
+                                class="group flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-3 text-left transition hover:border-brand hover:shadow-sm">
+                            <span class="grid h-9 w-9 flex-none place-items-center rounded-full bg-brand-soft text-sm font-semibold text-brand-ink">
+                                {{ user.name.split()[0][0] }}{{ user.name.split()[-1][0] }}
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-sm font-semibold">{{ user.name }}</span>
+                                <span class="mt-0.5 block text-xs text-muted">
+                                    {{ user.role }}{% if user.department_name %} &middot; {{ user.department_name }}{% endif %}
+                                </span>
+                            </span>
+                            <span class="text-muted opacity-0 transition group-hover:opacity-100">
+                                {{ icon('arrow-right', 'nav-icon') }}
+                            </span>
+                        </button>
+                    </form>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
 {% endblock %}

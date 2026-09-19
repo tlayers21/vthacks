@@ -169,6 +169,18 @@ def list_expenses(
     ).fetchall()
 
 
+def category_spend_summary(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """This month's committed spend per category, biggest first. Backs the finance breakdown."""
+    return conn.execute(
+        f"SELECT category, SUM(amount_cents) AS spent_cents, COUNT(*) AS expense_count"
+        f" FROM expenses"
+        f" WHERE status IN ({','.join('?' * len(COMMITTED_STATUSES))})"
+        f" AND strftime('%Y-%m', submitted_at) = strftime('%Y-%m', 'now')"
+        f" GROUP BY category ORDER BY spent_cents DESC",
+        COMMITTED_STATUSES,
+    ).fetchall()
+
+
 def department_spend_summary(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Budget vs. committed spend for every department. Backs the finance overview."""
     return conn.execute(

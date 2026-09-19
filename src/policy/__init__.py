@@ -21,6 +21,7 @@ from .rules import (
     RuleSource,
     StaticRuleSource,
     default_rule_source,
+    overridden_categories,
     resolved_rules,
 )
 
@@ -41,5 +42,6 @@ __all__ = [
     "Violation",
     "default_rule_source",
     "evaluate_expense",
+    "overridden_categories",
     "resolved_rules",
 ]

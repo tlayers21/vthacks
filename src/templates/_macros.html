@@ -1,25 +1,154 @@
+{#- Presentation helpers. Component classes (.badge, .bar, .card ...) are defined in base.html so
+    the markup here stays readable instead of carrying long utility strings. -#}
+
+{%- set BADGE_TONE = {
+    'auto_approved': 'good',
+    'approved': 'good',
+    'paid': 'good',
+    'needs_approval': 'warn',
+    'blocked': 'crit',
+    'rejected': 'crit',
+    'payout_failed': 'crit',
+} -%}
+
+{%- set ROLE_TONE = {'Finance': 'brand', 'Manager': 'warn', 'Employee': 'neutral'} -%}
+
+
 {% macro money(cents) %}${{ '{:,.2f}'.format((cents or 0) / 100) }}{% endmacro %}
 
-{% macro badge(value) %}
-    <span class="badge badge-{{ value }}">{{ value.replace('_', ' ') }}</span>
+
+{#- Whole dollars, for stat tiles and axis ticks where cents are noise -#}
+{% macro money_short(cents) %}
+    {%- set dollars = (cents or 0) / 100 -%}
+    {%- if dollars >= 1000000 -%}
+        ${{ '{:,.1f}'.format(dollars / 1000000) }}M
+    {%- elif dollars >= 1000 -%}
+        ${{ '{:,.1f}'.format(dollars / 1000) }}K
+    {%- else -%}
+        ${{ '{:,.0f}'.format(dollars) }}
+    {%- endif -%}
 {% endmacro %}
+
+
+{% macro badge(value) %}
+    {%- set tone = BADGE_TONE.get(value, 'neutral') -%}
+    <span class="badge tone-{{ tone }}">
+        <span class="badge-dot"></span>{{ value.replace('_', ' ') }}
+    </span>
+{% endmacro %}
+
+
+{% macro role_badge(role) %}
+    <span class="badge tone-{{ ROLE_TONE.get(role, 'neutral') }}"><span class="badge-dot"></span>{{ role }}</span>
+{% endmacro %}
+
+
+{% macro category_chip(name) %}
+    <span class="chip">{{ name }}</span>
+{% endmacro %}
+
 
 {% macro violation_list(items) %}
     {% if items %}
         <ul class="violations">
             {% for v in items %}
-                <li class="{{ v.severity }}">{{ v.message }}</li>
+                <li class="{{ v.severity }}">
+                    {{ icon('alert-triangle' if v.severity == 'warn' else 'x-circle', 'violation-icon') }}
+                    <span>{{ v.message }}</span>
+                </li>
             {% endfor %}
         </ul>
     {% endif %}
 {% endmacro %}
 
+
+{#- A meter, not a chart: one ratio against a limit. The fill carries severity and the track is a
+    lighter step of the same hue. The percentage label is the relief the amber step needs on a
+    light surface, so it is never optional. -#}
 {% macro budget_bar(committed, budget) %}
     {% set pct = (committed / budget * 100) if budget else 0 %}
-    <div class="bar {% if pct > 100 %}over{% elif pct > 85 %}near{% endif %}">
+    {% set state = 'over' if pct > 100 else ('near' if pct > 85 else '') %}
+    <div class="bar {{ state }}">
         <span style="width: {{ [pct, 100] | min }}%"></span>
     </div>
-    <p class="muted">
-        {{ money(committed) }} of {{ money(budget) }} &middot; {{ '{:.0f}'.format(pct) }}%
+    {#- Compact figures here so a long pair never wraps and staggers a row of cards -#}
+    <p class="bar-label">
+        {{ icon('alert-triangle' if state else 'check-circle', 'bar-icon') }}
+        <span>{{ money_short(committed) }} of {{ money_short(budget) }}</span>
+        <span class="bar-pct">{{ '{:.0f}'.format(pct) }}%</span>
     </p>
+{% endmacro %}
+
+
+{% macro stat_tile(label, value, sub='', tone='neutral') %}
+    <div class="stat tone-{{ tone }}">
+        <p class="stat-label">{{ label }}</p>
+        <p class="stat-value">{{ value }}</p>
+        {% if sub %}<p class="stat-sub">{{ sub }}</p>{% endif %}
+    </div>
+{% endmacro %}
+
+
+{% macro empty_state(title, body='') %}
+    <div class="empty">
+        <div class="empty-icon">{{ icon('inbox') }}</div>
+        <p class="empty-title">{{ title }}</p>
+        {% if body %}<p class="empty-body">{{ body }}</p>{% endif %}
+    </div>
+{% endmacro %}
+
+
+{% macro nav_link(href, label, name, active) %}
+    <a href="{{ href }}" class="nav-link{% if active %} is-active{% endif %}"
+       {% if active %}aria-current="page"{% endif %}>
+        {{ icon(name, 'nav-icon') }}<span>{{ label }}</span>
+    </a>
+{% endmacro %}
+
+
+{#- Inline so the pages carry no icon-font or sprite dependency. currentColor throughout. -#}
+{% macro icon(name, cls='icon') %}
+    <svg class="{{ cls }}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        {%- if name == 'plus' -%}
+            <path d="M12 5v14M5 12h14"/>
+        {%- elif name == 'receipt' -%}
+            <path d="M5 3v18l2-1.5L9 21l2-1.5L13 21l2-1.5L17 21l2-1.5V3H5z"/><path d="M9 8h6M9 12h6"/>
+        {%- elif name == 'check-circle' -%}
+            <circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>
+        {%- elif name == 'x-circle' -%}
+            <circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>
+        {%- elif name == 'alert-triangle' -%}
+            <path d="M10.3 4.3 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"/>
+            <path d="M12 9v4M12 17h.01"/>
+        {%- elif name == 'clock' -%}
+            <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+        {%- elif name == 'chart' -%}
+            <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 4-6"/>
+        {%- elif name == 'shield' -%}
+            <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="m9.5 12 2 2 3.5-4"/>
+        {%- elif name == 'wallet' -%}
+            <path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/>
+            <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z"/>
+            <path d="M16 13h.01"/>
+        {%- elif name == 'users' -%}
+            <path d="M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20"/><circle cx="9" cy="7" r="3.5"/>
+            <path d="M22 20v-1.5a4 4 0 0 0-3-3.87"/><path d="M16 3.6a4 4 0 0 1 0 7.75"/>
+        {%- elif name == 'inbox' -%}
+            <path d="M3 13h5l1.5 3h5L16 13h5"/>
+            <path d="M5.4 5.6 3 13v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5l-2.4-7.4A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.9 1.6z"/>
+        {%- elif name == 'search' -%}
+            <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+        {%- elif name == 'menu' -%}
+            <path d="M4 7h16M4 12h16M4 17h16"/>
+        {%- elif name == 'close' -%}
+            <path d="m6 6 12 12M18 6 6 18"/>
+        {%- elif name == 'arrow-right' -%}
+            <path d="M5 12h14M13 6l6 6-6 6"/>
+        {%- elif name == 'refresh' -%}
+            <path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/>
+        {%- elif name == 'sparkle' -%}
+            <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>
+        {%- endif -%}
+    </svg>
 {% endmacro %}

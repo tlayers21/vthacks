@@ -1,60 +1,212 @@
 {% extends "base.html" %}
-{% from "_macros.html" import money, badge, violation_list %}
+{% from "_macros.html" import money, money_short, badge, violation_list, category_chip, empty_state, icon %}
 {% block title %}{{ title }}{% endblock %}
-{% block content %}
-    <h1>{{ title }}</h1>
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_subtitle %}
+    <p class="page-sub">
+        Every submission with the verdict the policy engine gave it, and why.
+    </p>
+{% endblock %}
 
-    {% if not expenses %}
-        <p class="empty">Nothing here yet.</p>
-    {% else %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Merchant</th>
-                    <th>Category</th>
-                    <th class="amount">Amount</th>
-                    <th>Status</th>
-                    <th>Policy</th>
-                    {% if actor.role != 'Employee' %}<th>Submitted by</th>{% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for expense in expenses %}
-                    <tr {% if request.args.get('submitted') == expense.expense_id | string %}
-                            style="outline:2px solid var(--brand)"{% endif %}>
-                        <td>
-                            {{ expense.merchant or '--' }}
-                            {% if expense.description %}
-                                <br><span class="muted">{{ expense.description }}</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ expense.category }}</td>
-                        <td class="amount">{{ money(expense.amount_cents) }}</td>
-                        <td>
-                            {{ badge(expense.status) }}
-                            {% if expense.status == 'payout_failed' %}
-                                <form class="inline" method="post"
-                                      action="/api/expenses/{{ expense.expense_id }}/retry-payout"
-                                      onsubmit="event.preventDefault();
-                                                fetch(this.action, {method:'POST'})
-                                                    .then(() => location.reload());">
-                                    <button class="small" type="submit">Retry</button>
-                                </form>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {{ badge(expense.policy_decision) }}
-                            {{ violation_list(violations.get(expense.expense_id, [])) }}
-                        </td>
-                        {% if actor.role != 'Employee' %}
-                            <td>
-                                {{ expense.submitter_name }}
-                                <br><span class="muted">{{ expense.department_name }}</span>
-                            </td>
-                        {% endif %}
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% block page_actions %}
+    {% if actor.department_id %}
+        <a href="/expenses/new" class="btn btn-primary">{{ icon('plus', 'nav-icon') }}New expense</a>
     {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% set totals = namespace(all=0, pending=0, pending_count=0, paid=0) %}
+    {% for expense in expenses %}
+        {% set totals.all = totals.all + expense.amount_cents %}
+        {% if expense.status == 'needs_approval' %}
+            {% set totals.pending = totals.pending + expense.amount_cents %}
+            {% set totals.pending_count = totals.pending_count + 1 %}
+        {% elif expense.status == 'paid' %}
+            {% set totals.paid = totals.paid + expense.amount_cents %}
+        {% endif %}
+    {% endfor %}
+
+    {% if expenses %}
+        <div class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="stat">
+                <p class="stat-label">Expenses</p>
+                <p class="stat-value">{{ expenses | length }}</p>
+            </div>
+            <div class="stat">
+                <p class="stat-label">Total value</p>
+                <p class="stat-value">{{ money_short(totals.all) }}</p>
+                <p class="stat-sub">{{ money(totals.all) }}</p>
+            </div>
+            <div class="stat {% if totals.pending_count %}tone-warn{% endif %}">
+                <p class="stat-label">Awaiting approval</p>
+                <p class="stat-value">{{ totals.pending_count }}</p>
+                <p class="stat-sub">{{ money(totals.pending) }} held up</p>
+            </div>
+            <div class="stat tone-good">
+                <p class="stat-label">Paid out</p>
+                <p class="stat-value">{{ money_short(totals.paid) }}</p>
+            </div>
+        </div>
+
+        <!-- One filter row above everything it scopes -->
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <div class="relative grow sm:grow-0">
+                <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted">
+                    {{ icon('search', 'nav-icon') }}
+                </span>
+                <input type="search" id="search" class="input pl-9 sm:w-72"
+                       placeholder="Search expenses" autocomplete="off">
+            </div>
+
+            <div class="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
+                {% for value, label in [('', 'All'), ('needs_approval', 'Pending'), ('paid', 'Paid'),
+                                        ('approved', 'Approved'), ('rejected', 'Rejected'),
+                                        ('payout_failed', 'Payout failed')] %}
+                    <button type="button" class="btn btn-ghost btn-sm status-filter{% if not value %} is-on{% endif %}"
+                            data-status="{{ value }}">{{ label }}</button>
+                {% endfor %}
+            </div>
+
+            <select id="category-filter" class="select ml-auto sm:w-44">
+                <option value="">All categories</option>
+                {% for category in categories %}
+                    <option value="{{ category }}">{{ category }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+            <div class="overflow-x-auto">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>Merchant</th>
+                            <th>Category</th>
+                            <th class="num">Amount</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Policy</th>
+                            {% if actor.role != 'Employee' %}<th>Submitted by</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody id="expense-rows">
+                        {% for expense in expenses %}
+                            {% set is_new = request.args.get('submitted') == expense.expense_id | string %}
+                            <tr data-expense-id="{{ expense.expense_id }}"
+                                data-status="{{ expense.status }}"
+                                data-category="{{ expense.category }}"
+                                data-search="{{ (expense.merchant ~ ' ' ~ (expense.description or '') ~ ' ' ~ expense.submitter_name) | lower }}"
+                                {% if is_new %}class="ring-2 ring-inset ring-brand"{% endif %}>
+                                <td>
+                                    <span class="font-medium">{{ expense.merchant or '—' }}</span>
+                                    {% if expense.description %}
+                                        <span class="mt-0.5 block text-xs text-muted">{{ expense.description }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ category_chip(expense.category) }}</td>
+                                <td class="num font-medium">{{ money(expense.amount_cents) }}</td>
+                                <td class="whitespace-nowrap text-muted">{{ expense.submitted_at[:10] }}</td>
+                                <td>
+                                    {{ badge(expense.status) }}
+                                    {% if expense.status == 'payout_failed' %}
+                                        <button type="button" class="btn btn-ghost btn-sm mt-1.5"
+                                                data-retry="{{ expense.expense_id }}">
+                                            {{ icon('refresh', 'nav-icon') }}Retry
+                                        </button>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ badge(expense.policy_decision) }}
+                                    {{ violation_list(violations.get(expense.expense_id, [])) }}
+                                </td>
+                                {% if actor.role != 'Employee' %}
+                                    <td>
+                                        <span class="whitespace-nowrap">{{ expense.submitter_name }}</span>
+                                        <span class="mt-0.5 block text-xs text-muted">{{ expense.department_name }}</span>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p id="no-matches" class="hidden px-4 py-10 text-center text-sm text-muted">
+                No expenses match those filters.
+            </p>
+        </div>
+    {% else %}
+        {{ empty_state('Nothing here yet.', 'Submitted expenses and their policy verdicts will show up here.') }}
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        const rows = [...document.querySelectorAll("#expense-rows tr")];
+        const search = document.getElementById("search");
+        const categoryFilter = document.getElementById("category-filter");
+        const noMatches = document.getElementById("no-matches");
+        const statusButtons = [...document.querySelectorAll(".status-filter")];
+        let activeStatus = "";
+
+        function applyFilters() {
+            const term = search.value.trim().toLowerCase();
+            const category = categoryFilter.value;
+            let shown = 0;
+            for (const row of rows) {
+                const match =
+                    (!activeStatus || row.dataset.status === activeStatus) &&
+                    (!category || row.dataset.category === category) &&
+                    (!term || row.dataset.search.includes(term));
+                row.hidden = !match;
+                if (match) shown += 1;
+            }
+            noMatches.classList.toggle("hidden", shown > 0);
+        }
+
+        search.addEventListener("input", applyFilters);
+        categoryFilter.addEventListener("change", applyFilters);
+        for (const button of statusButtons) {
+            button.addEventListener("click", () => {
+                activeStatus = button.dataset.status;
+                for (const other of statusButtons) other.classList.toggle("is-on", other === button);
+                applyFilters();
+            });
+        }
+
+        for (const button of document.querySelectorAll("[data-retry]")) {
+            button.addEventListener("click", async () => {
+                button.disabled = true;
+                const original = button.innerHTML;
+                button.textContent = "Retrying…";
+                try {
+                    const response = await fetch(`/api/expenses/${button.dataset.retry}/retry-payout`, {
+                        method: "POST",
+                    });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        toast(result.error || "Retry failed.", "crit");
+                        button.disabled = false;
+                        button.innerHTML = original;
+                        return;
+                    }
+                    toast(`Payout ${result.status.replace("_", " ")}.`,
+                          result.status === "paid" ? "good" : "warn");
+                    location.reload();
+                } catch {
+                    toast("Retry could not reach the server.", "crit");
+                    button.disabled = false;
+                    button.innerHTML = original;
+                }
+            });
+        }
+
+        const submitted = new URLSearchParams(location.search).get("submitted");
+        if (submitted) {
+            const row = document.querySelector(`[data-expense-id="${submitted}"]`);
+            const status = row?.dataset.status ?? "";
+            toast(`Expense submitted — ${status.replace("_", " ") || "recorded"}.`,
+                  { paid: "good", rejected: "crit" }[status] ?? "warn");
+            row?.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+    </script>
 {% endblock %}

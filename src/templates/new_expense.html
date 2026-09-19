@@ -1,54 +1,116 @@
 {% extends "base.html" %}
-{% from "_macros.html" import money, budget_bar %}
+{% from "_macros.html" import money, money_short, budget_bar, icon %}
 {% block title %}New expense{% endblock %}
+{% block page_title %}New expense{% endblock %}
+{% block page_subtitle %}
+    <p class="page-sub">
+        The policy engine runs on every keystroke, so you know the verdict before you submit.
+    </p>
+{% endblock %}
+
 {% block content %}
-    <h1>New expense</h1>
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <form id="expense-form" class="card">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                    <label class="label" for="amount">Amount</label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
+                        <input type="number" id="amount" name="amount" step="0.01" min="0.01"
+                               class="input pl-7 text-lg font-semibold" placeholder="0.00"
+                               autocomplete="off" required>
+                    </div>
+                </div>
 
-    <div class="split">
-        <form id="expense-form">
-            <label for="amount">Amount</label>
-            <input type="number" id="amount" name="amount" step="0.01" min="0.01"
-                   placeholder="0.00" required>
+                <div>
+                    <label class="label" for="category">Category</label>
+                    <select id="category" name="category" class="select" required>
+                        {% for category in categories %}
+                            <option value="{{ category }}">{{ category }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-            <label for="category">Category</label>
-            <select id="category" name="category" required>
-                {% for category in categories %}
-                    <option value="{{ category }}">{{ category }}</option>
-                {% endfor %}
-            </select>
+                <div>
+                    <label class="label" for="merchant">Merchant</label>
+                    <input type="text" id="merchant" name="merchant" class="input" maxlength="100"
+                           placeholder="Figma" autocomplete="off">
+                </div>
 
-            <label for="merchant">Merchant</label>
-            <input type="text" id="merchant" name="merchant" maxlength="100"
-                   placeholder="Figma">
-
-            <label for="description">Description</label>
-            <textarea id="description" name="description" rows="3" maxlength="1000"></textarea>
-
-            <button type="submit">Submit expense</button>
-        </form>
-
-        <aside>
-            <div id="preview">
-                <p class="headline">Enter an amount</p>
-                <p class="muted">Policy is checked before you submit.</p>
+                <div class="sm:col-span-2">
+                    <label class="label" for="description">Description</label>
+                    <textarea id="description" name="description" class="textarea" rows="3"
+                              maxlength="1000" placeholder="What was this for?"></textarea>
+                </div>
             </div>
 
-            <div class="card" style="margin-top:1rem">
-                <h3>{{ actor.name }}'s department this month</h3>
+            <div class="mt-5 flex items-center gap-3 border-t border-line pt-4">
+                <button type="submit" id="submit-button" class="btn btn-primary">Submit expense</button>
+                <p id="submit-hint" class="text-xs text-muted"></p>
+            </div>
+        </form>
+
+        <aside class="flex flex-col gap-4 lg:sticky lg:top-6">
+            <div id="preview" class="preview">
+                <p class="preview-head">{{ icon('sparkle') }}<span>Enter an amount</span></p>
+                <p class="mt-1 text-sm text-muted">Policy is checked before you submit.</p>
+            </div>
+
+            <div class="card">
+                <h2 class="text-sm font-semibold">Your department this month</h2>
                 {{ budget_bar(budget.committed_cents, budget.monthly_budget_cents) }}
+                <p id="budget-after" class="mt-2 border-t border-line pt-2 text-xs text-muted">
+                    {{ money(budget.monthly_budget_cents - budget.committed_cents) }} left to spend.
+                </p>
             </div>
         </aside>
     </div>
+{% endblock %}
 
+{% block scripts %}
     <script>
         const form = document.getElementById("expense-form");
         const preview = document.getElementById("preview");
+        const submitButton = document.getElementById("submit-button");
+        const submitHint = document.getElementById("submit-hint");
+        const budgetAfter = document.getElementById("budget-after");
 
-        const HEADLINES = {
-            auto_approved: "Auto-approves — paid immediately",
-            needs_approval: "Needs manager approval",
-            blocked: "Blocked by policy",
+        const BUDGET_CENTS = {{ budget.monthly_budget_cents }};
+        const COMMITTED_CENTS = {{ budget.committed_cents }};
+
+        const STATES = {
+            auto_approved: {
+                headline: "Auto-approves — paid immediately",
+                button: "Submit — auto-approves",
+                hint: "No manager needed.",
+                icon: '<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>',
+            },
+            needs_approval: {
+                headline: "Needs manager approval",
+                button: "Submit for approval",
+                hint: "This lands in your manager's queue.",
+                icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+            },
+            blocked: {
+                headline: "Blocked by policy",
+                button: "Submit anyway",
+                hint: "It will be recorded as blocked and paid to nobody.",
+                icon: '<path d="M10.3 4.3 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+            },
         };
+
+        const money = (cents) =>
+            (cents < 0 ? "-$" : "$") +
+            Math.abs(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        function svg(paths, cls = "icon") {
+            return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+        }
+
+        const WARN_PATH = '<path d="M10.3 4.3 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>';
+        const BLOCK_PATH = '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>';
+        const SPARKLE_PATH = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>';
 
         function payload() {
             const dollars = parseFloat(form.amount.value);
@@ -61,27 +123,46 @@
             };
         }
 
-        function render(decision, violations) {
-            preview.className = decision;
-            const items = violations.map(
-                (v) => `<li class="${v.severity}">${v.message}</li>`
-            ).join("");
+        function reset() {
+            preview.removeAttribute("data-state");
             preview.innerHTML =
-                `<p class="headline">${HEADLINES[decision]}</p>` +
+                `<p class="preview-head">${svg(SPARKLE_PATH)}<span>Enter an amount</span></p>` +
+                '<p class="mt-1 text-sm text-muted">Policy is checked before you submit.</p>';
+            submitButton.textContent = "Submit expense";
+            submitButton.className = "btn btn-primary";
+            submitHint.textContent = "";
+            budgetAfter.textContent = `${money(BUDGET_CENTS - COMMITTED_CENTS)} left to spend.`;
+        }
+
+        function render(decision, violations, amountCents) {
+            const state = STATES[decision];
+            preview.dataset.state = decision;
+            const items = violations
+                .map((v) => `<li class="${v.severity}">` +
+                    svg(v.severity === "warn" ? WARN_PATH : BLOCK_PATH, "violation-icon") +
+                    `<span>${v.message}</span></li>`)
+                .join("");
+            preview.innerHTML =
+                `<p class="preview-head">${svg(state.icon)}<span>${state.headline}</span></p>` +
                 (items ? `<ul class="violations">${items}</ul>` : "");
+
+            submitButton.textContent = state.button;
+            submitButton.className =
+                "btn " + (decision === "blocked" ? "btn-danger" : decision === "auto_approved" ? "btn-good" : "btn-primary");
+            submitHint.textContent = state.hint;
+
+            const left = BUDGET_CENTS - COMMITTED_CENTS - amountCents;
+            budgetAfter.textContent =
+                left < 0
+                    ? `${money(-left)} over budget if this goes through.`
+                    : `${money(left)} left after this expense.`;
         }
 
         // Debounced so typing an amount does not fire a request per keystroke
         let timer;
         async function refresh() {
             const body = payload();
-            if (!body) {
-                preview.className = "";
-                preview.innerHTML =
-                    '<p class="headline">Enter an amount</p>' +
-                    '<p class="muted">Policy is checked before you submit.</p>';
-                return;
-            }
+            if (!body) return reset();
             const response = await fetch("/api/policies/preview", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -89,7 +170,7 @@
             });
             if (!response.ok) return;
             const result = await response.json();
-            render(result.decision, result.violations);
+            render(result.decision, result.violations, body.amount_cents);
         }
 
         form.addEventListener("input", () => {
@@ -102,17 +183,23 @@
             event.preventDefault();
             const body = payload();
             if (!body) return;
-            const response = await fetch("/api/expenses", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                render("blocked", [{ severity: "block", message: result.error }]);
-                return;
+            submitButton.disabled = true;
+            try {
+                const response = await fetch("/api/expenses", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    render("blocked", [{ severity: "block", message: result.error }], body.amount_cents);
+                    toast(result.error || "Could not submit that expense.", "crit");
+                    return;
+                }
+                window.location = "/expenses/mine?submitted=" + result.expense_id;
+            } finally {
+                submitButton.disabled = false;
             }
-            window.location = "/expenses/mine?submitted=" + result.expense_id;
         });
     </script>
 {% endblock %}

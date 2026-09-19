@@ -82,6 +82,14 @@ def default_rule_source() -> RuleSource:
     return _default_source
 
 
+def overridden_categories(
+    department_id: int,
+    rules: Mapping[tuple[int | None, str], PolicyRule] = POLICY_RULES,
+) -> set[str]:
+    """Categories where this department has its own rule instead of the org-wide one."""
+    return {category for dept, category in rules if dept == department_id}
+
+
 def resolved_rules(
     department_id: int, source: RuleSource | None = None
 ) -> dict[str, PolicyRule]:

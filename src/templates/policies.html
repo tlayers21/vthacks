@@ -1,16 +1,28 @@
 {% extends "base.html" %}
-{% from "_macros.html" import money %}
+{% from "_macros.html" import money, icon %}
 {% block title %}Policies{% endblock %}
-{% block content %}
-    <h1>Spend policy</h1>
-    <p class="muted">
-        Rules are defined in code (<code>policy/rules.py</code>), so changing a limit is a
-        deploy rather than an edit here. Department rules fall back to the org-wide default.
+{% block page_title %}Spend policy{% endblock %}
+{% block page_subtitle %}
+    <p class="page-sub">
+        Rules live in code (<code class="rounded bg-brand-soft px-1 py-0.5 text-xs text-brand-ink">policy/rules.py</code>),
+        so changing a limit is a deploy rather than an edit here. A department without its own rule
+        falls back to the org-wide default.
     </p>
+{% endblock %}
 
-    <form method="get" action="/policies">
-        <label for="department_id">Department</label>
-        <select id="department_id" name="department_id" onchange="this.form.submit()">
+{% block content %}
+    <form method="get" action="/policies" class="mb-6">
+        <label class="label" for="department_id">Department</label>
+        <div class="flex flex-wrap gap-1.5">
+            {% for department in departments %}
+                <button type="submit" name="department_id" value="{{ department.department_id }}"
+                        class="btn btn-ghost btn-sm{% if department.department_id == department_id %} is-on{% endif %}">
+                    {{ department.name }}
+                </button>
+            {% endfor %}
+        </div>
+        <select id="department_id" name="department_id" class="select sr-only"
+                onchange="this.form.submit()" tabindex="-1" aria-hidden="true">
             {% for department in departments %}
                 <option value="{{ department.department_id }}"
                         {% if department.department_id == department_id %}selected{% endif %}>
@@ -20,28 +32,64 @@
         </select>
     </form>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Category</th>
-                <th class="amount">Auto-approves under</th>
-                <th class="amount">Blocked over</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for category, rule in rules.items() %}
-                <tr>
-                    <td>{{ category }}</td>
-                    <td class="amount">{{ money(rule.auto_approve_limit_cents) }}</td>
-                    <td class="amount">{{ money(rule.per_expense_limit_cents) }}</td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
+        <span class="flex items-center gap-1.5">
+            <span class="h-2 w-4 rounded-sm bg-good"></span>Auto-approves
+        </span>
+        <span class="flex items-center gap-1.5">
+            <span class="h-2 w-4 rounded-sm bg-warn"></span>Needs a manager
+        </span>
+        <span class="flex items-center gap-1.5">
+            <span class="h-2 w-4 rounded-sm bg-crit/40"></span>Blocked outright
+        </span>
+    </div>
 
-    <p class="muted">
-        Anything between the two limits goes to a manager. An expense that would push the
-        department past its monthly budget also goes to a manager &mdash; it is never blocked
-        outright.
-    </p>
+    <div class="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+        <div class="overflow-x-auto">
+            <table class="tbl">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th class="min-w-56">Bands</th>
+                        <th class="num">Auto-approves under</th>
+                        <th class="num">Blocked over</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set widest = rules.values() | map(attribute='per_expense_limit_cents') | max %}
+                    {% for category, rule in rules.items() %}
+                        <tr>
+                            <td>
+                                <span class="font-medium">{{ category }}</span>
+                                {% if category in overrides %}
+                                    <span class="badge tone-brand ml-1.5"><span class="badge-dot"></span>override</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set auto_pct = rule.auto_approve_limit_cents / widest * 100 %}
+                                {% set cap_pct = rule.per_expense_limit_cents / widest * 100 %}
+                                <div class="band">
+                                    <i class="zone-good" style="width: {{ '{:.1f}'.format(auto_pct) }}%"></i>
+                                    <i class="zone-warn" style="width: {{ '{:.1f}'.format(cap_pct - auto_pct) }}%"></i>
+                                    <i class="zone-crit" style="width: {{ '{:.1f}'.format(100 - cap_pct) }}%"></i>
+                                </div>
+                            </td>
+                            <td class="num">{{ money(rule.auto_approve_limit_cents) }}</td>
+                            <td class="num">{{ money(rule.per_expense_limit_cents) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mt-4 flex items-start gap-2.5 rounded-[var(--radius-card)] border border-line bg-surface p-4 text-sm text-muted">
+        {{ icon('shield', 'nav-icon') }}
+        <p class="m-0">
+            Anything between the two limits goes to a manager. An expense that would push the
+            department past its monthly budget also goes to a manager &mdash; it is never blocked
+            outright. Bands are drawn to a common scale, so a wider green band means a more
+            permissive category.
+        </p>
+    </div>
 {% endblock %}

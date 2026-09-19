@@ -8,7 +8,7 @@ from flask import Blueprint, redirect, render_template, request
 
 from api.deps import current_user, get_conn, switchable_users
 from db import expenses as expense_db
-from policy import CATEGORIES, resolved_rules
+from policy import CATEGORIES, overridden_categories, resolved_rules
 from services.permissions import default_scope, visible_expense_filter
 
 bp = Blueprint("ui", __name__)
@@ -75,6 +75,8 @@ def finance():
     return render_template(
         "finance.html",
         departments=expense_db.department_spend_summary(conn),
+        categories_spend=expense_db.category_spend_summary(conn),
+        pending=expense_db.list_expenses(conn, statuses=("needs_approval",)),
         customers=conn.execute(
             "SELECT c.name AS customer_name, c.role, d.name AS department_name"
             " FROM customers c JOIN departments d ON c.department_id = d.department_id"
@@ -96,6 +98,7 @@ def policies_page():
         departments=departments,
         department_id=department_id,
         rules=resolved_rules(department_id),
+        overrides=overridden_categories(department_id),
     )
 
 

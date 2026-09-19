@@ -40,3 +40,11 @@ def test_injected_rules_replace_the_defaults():
     tiny = PolicyRule(per_expense_limit_cents=100, auto_approve_limit_cents=50)
     source = StaticRuleSource(rules={(None, "food"): tiny}, fallback=tiny)
     assert source.rule_for(1, "food") == tiny
+
+
+def test_only_departments_with_their_own_rule_report_overrides():
+    from policy import overridden_categories
+
+    assert overridden_categories(1) == {"software"}  # Engineering buys tooling
+    assert overridden_categories(2) == {"marketing"}
+    assert overridden_categories(4) == set()  # Operations rides the org defaults
