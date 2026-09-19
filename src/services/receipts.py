@@ -109,6 +109,12 @@ def resolve(stored_path: str) -> Path:
     Belt and braces: `stored_path` comes from our own database rather than a request, but a
     single bad write upstream should not become an arbitrary file read.
     """
+    # A stored name is always a hash plus an extension, so any separator means a bad write.
+    # Checked before resolving because "..\..\x" escapes on Windows but is a legal POSIX
+    # filename, and this has to refuse it on both
+    if "/" in stored_path or "\\" in stored_path:
+        raise RejectedReceipt("receipt path escapes the receipts directory")
+
     root = settings.receipts_dir.resolve()
     candidate = (root / stored_path).resolve()
     if not candidate.is_relative_to(root):
