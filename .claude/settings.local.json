@@ -22,7 +22,8 @@
       "Bash(curl -s -o /dev/null -w \"startup: %{http_code}\\\\n\" http://127.0.0.1:5000/)",
       "Bash(echo \"--- exit $? ---\")",
       "Bash(sort -k2)",
-      "Bash(python src/db/seed.py --reset --mode real)"
+      "Bash(python src/db/seed.py --reset --mode real)",
+      "Bash(awk *)"
     ]
   },
   "enableAllProjectMcpServers": true,
