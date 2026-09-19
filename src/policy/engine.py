@@ -16,7 +16,7 @@ from .models import (
     PolicyResult,
     Violation,
 )
-from .rules import RECEIPT_REQUIRED_OVER_CENTS, RuleSource, default_rule_source
+from .rules import RECEIPT_REQUIRED_OVER_CENTS, RuleSource
 
 
 def _dollars(cents: int) -> str:
@@ -26,11 +26,11 @@ def _dollars(cents: int) -> str:
 def evaluate_expense(
     expense: ExpenseDraft,
     budget: DepartmentBudget,
-    rules: RuleSource | None = None,
+    rules: RuleSource,
 ) -> PolicyResult:
-    rule = (rules or default_rule_source()).rule_for(
-        expense.department_id, expense.category
-    )
+    """`rules` is required: limits are editable now, so there is no safe default to fall back
+    on -- an implicit one would silently evaluate against a stale copy of the rule set."""
+    rule = rules.rule_for(expense.department_id, expense.category)
     amount = expense.amount_cents
     violations: list[Violation] = []
 

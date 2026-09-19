@@ -338,6 +338,27 @@
                     border-color: var(--color-brand);
                 }
                 .textarea { resize: vertical; }
+                /* Money fields are typed, not nudged: a spinner that steps a $120,000 budget
+                   by one cent is noise, and its hit area crowds the digits */
+                .no-spin {
+                    appearance: textfield;
+                    -moz-appearance: textfield;
+                }
+                .no-spin::-webkit-outer-spin-button,
+                .no-spin::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+
+                /* Money cells in the policy table: narrow, right-aligned, tabular so the
+                   columns line up the way the read-only view does */
+                .input-num {
+                    width: 8rem;
+                    margin-left: auto;
+                    padding: 0.35rem 0.5rem;
+                    text-align: right;
+                    font-variant-numeric: tabular-nums;
+                }
 
                 /* -- tables ---------------------------------------------------- */
                 .tbl { width: 100%; border-collapse: collapse; font-size: 0.875rem; }

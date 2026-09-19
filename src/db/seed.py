@@ -53,6 +53,7 @@ def load_reference_org() -> dict:
         "expense_violations": [
             dict(r) for r in mem.execute("SELECT * FROM expense_violations")
         ],
+        "policy_rules": [dict(r) for r in mem.execute("SELECT * FROM policy_rules")],
     }
     mem.close()
     return org
@@ -233,6 +234,20 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                 ),
             )
 
+        # department_id is an explicit integer that is never remapped, and updated_by is NULL
+        # on seeded rows -- nobody edited them, they are what the database ships with
+        for rule in org["policy_rules"]:
+            conn.execute(
+                "INSERT INTO policy_rules (department_id, category,"
+                " per_expense_limit_cents, auto_approve_limit_cents) VALUES (?, ?, ?, ?)",
+                (
+                    rule["department_id"],
+                    rule["category"],
+                    rule["per_expense_limit_cents"],
+                    rule["auto_approve_limit_cents"],
+                ),
+            )
+
         for violation in org["expense_violations"]:
             conn.execute(
                 "INSERT INTO expense_violations"
@@ -258,7 +273,8 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
         f"{len(org['departments'])} departments, "
         f"{len(org['budget_requests'])} budget requests, "
         f"{len(org['expenses'])} expenses, "
-        f"{len(org['expense_violations'])} violations -> {settings.db_path}"
+        f"{len(org['expense_violations'])} violations, "
+        f"{len(org['policy_rules'])} policy rules -> {settings.db_path}"
     )
     conn.close()
 

@@ -251,3 +251,23 @@ INSERT INTO expense_violations (violation_id, expense_id, rule, severity, messag
         '$16,000.00 is over the $2,500.00 auto-approve limit for marketing'),
     (8, 8, 'approval_threshold', 'warn',
         '$95.00 is over the $75.00 auto-approve limit for food');
+
+-- ---------------------------------------------------------------------------
+-- 9. Spend rules. Generated from policy.DEFAULT_POLICY_RULES so a fresh database behaves
+--    exactly as the old in-code constant did. Finance edits these from /policies at runtime.
+--    department_id NULL is the org-wide default; a row with a department is an override.
+-- ---------------------------------------------------------------------------
+INSERT INTO policy_rules
+    (department_id, category, per_expense_limit_cents, auto_approve_limit_cents) VALUES
+    (NULL, 'travel'          ,   300000,    50000),
+    (NULL, 'food'            ,    15000,     7500),
+    (NULL, 'client meals'    ,    50000,    10000),
+    (NULL, 'software'        ,   250000,    25000),
+    (NULL, 'equipment'       ,   500000,   100000),
+    (NULL, 'marketing'       ,  1000000,   100000),
+    (NULL, 'training'        ,   250000,    50000),
+    (NULL, 'office supplies' ,    50000,    10000),
+    (NULL, 'shipping'        ,    50000,    10000),
+    (NULL, 'other'           ,    25000,    10000),
+    (   1, 'software'        ,  1000000,   100000),
+    (   2, 'marketing'       ,  2500000,   250000);

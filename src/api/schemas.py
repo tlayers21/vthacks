@@ -7,7 +7,7 @@ would hand the caller a way to spend someone else's budget.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from policy import CATEGORIES
 
@@ -61,6 +61,29 @@ class FundingIn(BaseModel):
 
 class FundingDecisionIn(DecisionIn):
     pass
+
+
+class PolicyRuleIn(BaseModel):
+    """A spend rule as finance submits it. department_id None means the org-wide default."""
+
+    department_id: int | None = None
+    per_expense_limit_cents: int = Field(gt=0, le=100_000_000)
+    auto_approve_limit_cents: int = Field(ge=0, le=100_000_000)
+
+    @model_validator(mode="after")
+    def _limits_are_coherent(self):
+        # Mirrors the CHECK on policy_rules, so the caller gets a sentence not an IntegrityError
+        if self.auto_approve_limit_cents > self.per_expense_limit_cents:
+            raise ValueError(
+                "the auto-approve limit cannot exceed the per-expense limit"
+            )
+        return self
+
+
+class DepartmentBudgetIn(BaseModel):
+    """An absolute ceiling, not a delta. Zero is allowed -- it freezes a department."""
+
+    monthly_budget_cents: int = Field(ge=0, le=1_000_000_000)
 
 
 class SwitchIn(BaseModel):
