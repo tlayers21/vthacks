@@ -410,12 +410,12 @@
                     <aside data-sidebar
                            class="fixed inset-y-0 left-0 z-50 w-64 -translate-x-full transform border-r border-line bg-surface transition-transform duration-200
                                   lg:static lg:translate-x-0 lg:transition-none flex flex-col">
-                        <div class="flex items-center gap-2.5 px-5 py-5">
+                        <a href="{{ url_for('ui.home') }}"><div class="flex items-center gap-2.5 px-5 py-5">
                             {{ brand_mark(brand_assets) }}
                             <span class="font-semibold tracking-tight">Nessence</span>
                             <button type="button" class="btn btn-ghost btn-sm ml-auto lg:hidden"
                                     data-sidebar-close aria-label="Close menu">{{ icon('close', 'nav-icon') }}</button>
-                        </div>
+                        </div></a>
 
                         <nav class="flex flex-col gap-1 px-3">
                             {% for href, label, name in nav_items %}
