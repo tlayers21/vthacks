@@ -453,7 +453,9 @@
         }.get(role, []) %}
 
         <div class="app-shell">
-            {% if actor %}
+            {#- The landing page is the one page that keeps its own chrome while signed in:
+                the brand mark leads back to it, so it cannot be wearing a sidebar. -#}
+            {% if actor and not landing|default(false) %}
                 <div class="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] min-h-screen">
                     <!-- mobile bar -->
                     <div class="lg:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-surface px-4 py-3">
@@ -527,7 +529,7 @@
                     </main>
                 </div>
             {% else %}
-                <main>{% block signed_out %}{% endblock %}</main>
+                <main>{% block landing %}{% endblock %}</main>
             {% endif %}
         </div>
 

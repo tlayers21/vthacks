@@ -79,3 +79,20 @@ def can_decide_funding(actor: sqlite3.Row) -> bool:
 
 def default_scope(actor: sqlite3.Row) -> Scope:
     return {"Finance": "all", "Manager": "dept"}.get(actor["role"], "mine")
+
+
+def home_for(actor: sqlite3.Row | None) -> str:
+    """Where a role's work starts, and where a page it may not see sends it back to.
+
+    Signed out that is the landing page, which is also the only page `/` ever renders --
+    so this is the one place that knows a role's first screen.
+    """
+    if actor is None:
+        return "/"
+    if actor["role"] == "Finance":
+        return "/finance"
+    if actor["role"] == "Manager":
+        return "/approvals"
+    # The submit form refuses an employee with no department, and would bounce them
+    # straight back here
+    return "/expenses/new" if can_submit(actor) else "/expenses/mine"

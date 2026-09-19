@@ -53,14 +53,11 @@ def load_reference_org() -> dict:
         "expense_violations": [
             dict(r) for r in mem.execute("SELECT * FROM expense_violations")
         ],
-<<<<<<< HEAD
         "receipt_readings": [
             dict(r) for r in mem.execute("SELECT * FROM receipt_readings")
         ],
         "expense_flags": [dict(r) for r in mem.execute("SELECT * FROM expense_flags")],
-=======
         "policy_rules": [dict(r) for r in mem.execute("SELECT * FROM policy_rules")],
->>>>>>> 08d74469fe20bb43266181098afee88b8f061d86
     }
     mem.close()
     return org
@@ -242,7 +239,6 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                 ),
             )
 
-<<<<<<< HEAD
         # Keyed by receipt_hash, which is never remapped -- it is the file's own sha256
         for reading in org["receipt_readings"]:
             conn.execute(
@@ -269,7 +265,9 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                     flag["expense_id"],
                     flag["flag"],
                     flag["message"],
-=======
+                ),
+            )
+
         # department_id is an explicit integer that is never remapped, and updated_by is NULL
         # on seeded rows -- nobody edited them, they are what the database ships with
         for rule in org["policy_rules"]:
@@ -281,7 +279,6 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                     rule["category"],
                     rule["per_expense_limit_cents"],
                     rule["auto_approve_limit_cents"],
->>>>>>> 08d74469fe20bb43266181098afee88b8f061d86
                 ),
             )
 
@@ -311,11 +308,8 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
         f"{len(org['budget_requests'])} budget requests, "
         f"{len(org['expenses'])} expenses, "
         f"{len(org['expense_violations'])} violations, "
-<<<<<<< HEAD
-        f"{len(org['expense_flags'])} receipt flags -> {settings.db_path}"
-=======
+        f"{len(org['expense_flags'])} receipt flags, "
         f"{len(org['policy_rules'])} policy rules -> {settings.db_path}"
->>>>>>> 08d74469fe20bb43266181098afee88b8f061d86
     )
     conn.close()
 

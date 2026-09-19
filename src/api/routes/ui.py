@@ -13,20 +13,20 @@ from flask import Blueprint, current_app, redirect, render_template, request
 from api.deps import actor_with_role, current_user, get_conn, switchable_users
 from db import budget_requests as request_db
 from db import expenses as expense_db
+from db import policies as policy_db
 from db.ledger import transaction_ledger
-<<<<<<< HEAD
-from policy import CATEGORIES, overridden_categories, resolved_rules
-=======
 from policy import (
     CATEGORIES,
-    RECEIPT_REQUIRED_OVER_CENTS,
     overridden_categories,
     resolved_rules,
 )
-from db import policies as policy_db
 from services import policies as policy_service
->>>>>>> 08d74469fe20bb43266181098afee88b8f061d86
-from services.permissions import can_submit, default_scope, visible_expense_filter
+from services.permissions import (
+    can_submit,
+    default_scope,
+    home_for,
+    visible_expense_filter,
+)
 
 bp = Blueprint("ui", __name__)
 
@@ -77,21 +77,20 @@ def inject_brand():
 
 @bp.get("/")
 def home():
+    """The landing page, signed in or out -- the brand mark points here and stays here.
+
+    Signed in it keeps the hero and offers the way on, rather than bouncing to a role's
+    first screen: a logo that redirects is a logo you cannot click.
+    """
     actor = current_user()
-    if actor is None:
-        return render_template("index.html")
-    if actor["role"] == "Finance":
-        return redirect("/finance")
-    if actor["role"] == "Manager":
-        return redirect("/approvals")
-    return redirect("/expenses/new")
+    return render_template("index.html", landing=True, role_home=home_for(actor))
 
 
 @bp.get("/expenses/new")
 def new_expense():
     actor = current_user()
     if actor is None or not can_submit(actor):
-        return redirect("/")
+        return redirect(home_for(actor))
     budget = expense_db.department_budget(get_conn(), actor["department_id"])
     return render_template("new_expense.html", budget=budget)
 
@@ -100,7 +99,7 @@ def new_expense():
 def my_expenses():
     actor = current_user()
     if actor is None:
-        return redirect("/")
+        return redirect(home_for(actor))
     return render_template(
         "expenses.html", **_expense_view(actor, "mine"), title="My expenses"
     )
@@ -110,7 +109,7 @@ def my_expenses():
 def approvals():
     actor = actor_with_role("Manager")
     if actor is None:
-        return redirect("/")
+        return redirect(home_for(current_user()))
     conn = get_conn()
     filters = visible_expense_filter(actor, default_scope(actor))
     rows = expense_db.list_expenses(conn, statuses=("needs_approval",), **filters)
@@ -130,7 +129,7 @@ def funding():
     """Managers ask here, finance answers here."""
     actor = actor_with_role("Manager", "Finance")
     if actor is None:
-        return redirect("/")
+        return redirect(home_for(current_user()))
     conn = get_conn()
     if actor["role"] == "Finance":
         return render_template(
@@ -152,7 +151,7 @@ def funding():
 def transactions():
     """Every settled transfer, which is the whole of what finance does besides funding."""
     if actor_with_role("Finance") is None:
-        return redirect("/")
+        return redirect(home_for(current_user()))
     return render_template("transactions.html", ledger=transaction_ledger(get_conn()))
 
 
@@ -160,7 +159,7 @@ def transactions():
 def finance():
     """Department budgets against this month's committed spend."""
     if actor_with_role("Finance") is None:
-        return redirect("/")
+        return redirect(home_for(current_user()))
     conn = get_conn()
     return render_template(
         "finance.html",
@@ -222,7 +221,7 @@ def policies_page():
 def all_expenses():
     actor = actor_with_role("Manager", "Finance")
     if actor is None:
-        return redirect("/")
+        return redirect(home_for(current_user()))
     scope = default_scope(actor)
     return render_template(
         "expenses.html", **_expense_view(actor, scope), title="All expenses"

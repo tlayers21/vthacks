@@ -113,7 +113,6 @@ CREATE TABLE expense_violations (
     FOREIGN KEY (expense_id) REFERENCES expenses(expense_id) ON DELETE CASCADE
 );
 
-<<<<<<< HEAD
 -- What a model read off a receipt, cached by the file hash rather than by the expense:
 -- services/receipts.py dedupes identical bytes to one file on disk, so they are one reading
 -- too, and a resubmitted receipt costs nothing. spec 8.1.
@@ -148,7 +147,7 @@ CREATE TABLE expense_flags (
     UNIQUE (expense_id, flag),
     FOREIGN KEY (expense_id) REFERENCES expenses(expense_id) ON DELETE CASCADE
 );
-=======
+
 -- Spend rules, previously a constant in policy/rules.py. They live here so finance can change a
 -- limit from the dashboard instead of shipping a deploy. department_id NULL is the org-wide
 -- default a department inherits when it has no override of its own.
@@ -177,4 +176,3 @@ CREATE UNIQUE INDEX idx_policy_rules_dept ON policy_rules (department_id, catego
     WHERE department_id IS NOT NULL;
 CREATE UNIQUE INDEX idx_policy_rules_org ON policy_rules (category)
     WHERE department_id IS NULL;
->>>>>>> 08d74469fe20bb43266181098afee88b8f061d86

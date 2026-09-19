@@ -27,31 +27,52 @@ def test_pages_render(client, sign_in, person, paths):
         assert response.status_code == 200, f"{person} could not load {path}"
 
 
+ROLE_HOMES = [("alex", "/expenses/new"), ("marcus", "/approvals"), ("dana", "/finance")]
+
+
 @pytest.mark.parametrize(("person", "paths"), PAGES_OFF_LIMITS)
 def test_pages_outside_a_role_redirect_home(client, sign_in, person, paths):
+    home = dict(ROLE_HOMES)[person]
     sign_in(person)
     for path in paths:
         response = client.get(path)
         assert response.status_code == 302, f"{person} could still load {path}"
-        assert response.headers["Location"] == "/"
+        assert response.headers["Location"] == home
 
 
 def test_finance_overview_is_not_readable_signed_out(client):
     assert client.get("/finance").status_code == 302
 
 
+def test_a_page_a_signed_out_visitor_cannot_see_sends_them_to_the_landing_page(client):
+    assert client.get("/finance").headers["Location"] == "/"
+
+
 def test_landing_page_renders_signed_out(client):
     assert client.get("/").status_code == 200
 
 
-def test_home_sends_each_role_somewhere_useful(client, sign_in):
-    for person, destination in [
-        ("alex", "/expenses/new"),
-        ("marcus", "/approvals"),
-        ("dana", "/finance"),
-    ]:
-        sign_in(person)
-        assert client.get("/").headers["Location"] == destination
+@pytest.mark.parametrize(("person", "destination"), ROLE_HOMES)
+def test_the_landing_page_stays_put_when_signed_in(
+    client, sign_in, person, destination
+):
+    """The brand mark points at `/`, so `/` cannot redirect -- it offers the way on instead."""
+    sign_in(person)
+    page = client.get("/")
+
+    assert page.status_code == 200
+    body = page.get_data(as_text=True)
+    assert "Manage your business's money" in body
+    assert f'href="{destination}"' in body
+
+
+@pytest.mark.parametrize(("person", "destination"), ROLE_HOMES)
+def test_signing_in_lands_on_the_role_home(client, people, person, destination):
+    """The picker sends no `next`, so the switch itself decides where each role starts."""
+    response = client.post(
+        "/auth/switch", data={"user_id": people[person]["nessie_id"]}
+    )
+    assert response.headers["Location"] == destination
 
 
 def test_approval_queue_shows_the_violations_that_sent_it_there(client, sign_in):

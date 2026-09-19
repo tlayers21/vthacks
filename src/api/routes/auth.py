@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from api.deps import current_user, get_conn, switchable_users
 from api.schemas import SwitchIn
+from services.permissions import home_for
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -30,7 +31,9 @@ def switch():
 
     session["user_id"] = payload.user_id
     if request.form:
-        return redirect(request.form.get("next") or "/")
+        # Without a `next` the switcher lands on the new role's first screen -- `/` is the
+        # landing page now and would leave you looking at the page you just signed in from
+        return redirect(request.form.get("next") or home_for(current_user()))
     return jsonify(user_id=payload.user_id)
 
 

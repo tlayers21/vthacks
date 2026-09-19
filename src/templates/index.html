@@ -2,7 +2,7 @@
 {% from "_macros.html" import icon, role_badge, brand_mark %}
 {% block title %}Nessence{% endblock %}
 
-{% block signed_out %}
+{% block landing %}
     <div class="mx-auto max-w-5xl px-5 py-14 sm:py-20">
         <div class="flex items-center gap-2.5">
             {{ brand_mark(brand_assets, 'h-10 w-10') }}
@@ -14,8 +14,21 @@
             <span class="text-brand-ink">your</span> way.
         </h1>
 
+        {#- Signed in there is no sidebar here to navigate by, so the way on is the page's own -#}
+        {% if actor %}
+            <div class="mt-8 flex flex-wrap items-center gap-3">
+                <a href="{{ role_home }}" class="btn btn-primary">
+                    Continue as {{ actor.name.split()[0] }}
+                    {{ icon('arrow-right', 'nav-icon') }}
+                </a>
+                {{ role_badge(actor.role) }}
+            </div>
+        {% endif %}
+
         <div class="mt-14">
-            <h2 class="text-sm font-semibold tracking-wide text-muted uppercase">Sign in as</h2>
+            <h2 class="text-sm font-semibold tracking-wide text-muted uppercase">
+                {% if actor %}Switch to{% else %}Sign in as{% endif %}
+            </h2>
             <p class="mt-1.5 text-sm text-muted">
                 Pick a person and the app re-scopes to what
                 their role is allowed to see.
@@ -25,7 +38,6 @@
                 {% for user in switchable_users %}
                     <form method="post" action="/auth/switch">
                         <input type="hidden" name="user_id" value="{{ user.nessie_id }}">
-                        <input type="hidden" name="next" value="/">
                         <button type="submit"
                                 class="group flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-3 text-left transition hover:border-brand hover:shadow-sm">
                             <span class="grid h-9 w-9 flex-none place-items-center rounded-full bg-brand-soft text-sm font-semibold text-brand-ink">

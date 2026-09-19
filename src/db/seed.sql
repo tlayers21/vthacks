@@ -267,7 +267,6 @@ INSERT INTO expense_violations (violation_id, expense_id, rule, severity, messag
     (7, 6, 'approval_threshold', 'warn',
         '$16,000.00 is over the $2,500.00 auto-approve limit for marketing'),
     (8, 8, 'approval_threshold', 'warn',
-<<<<<<< HEAD
         '$95.00 is over the $75.00 auto-approve limit for food'),
     (9, 9, 'approval_threshold', 'warn',
         '$1,318.00 is over the $500.00 auto-approve limit for travel');
@@ -307,13 +306,11 @@ INSERT INTO receipt_readings (receipt_hash, status, merchant, total_cents, recei
 -- ---------------------------------------------------------------------------
 INSERT INTO expense_flags (flag_id, expense_id, flag, message) VALUES
     (1, 9, 'amount_mismatch', 'Receipt totals $318.00 but $1,318.00 was claimed.');
-=======
-        '$95.00 is over the $75.00 auto-approve limit for food');
 
 -- ---------------------------------------------------------------------------
--- 9. Spend rules. Generated from policy.DEFAULT_POLICY_RULES so a fresh database behaves
---    exactly as the old in-code constant did. Finance edits these from /policies at runtime.
---    department_id NULL is the org-wide default; a row with a department is an override.
+-- 11. Spend rules. Generated from policy.DEFAULT_POLICY_RULES so a fresh database behaves
+--     exactly as the old in-code constant did. Finance edits these from /policies at runtime.
+--     department_id NULL is the org-wide default; a row with a department is an override.
 -- ---------------------------------------------------------------------------
 INSERT INTO policy_rules
     (department_id, category, per_expense_limit_cents, auto_approve_limit_cents) VALUES
@@ -329,4 +326,3 @@ INSERT INTO policy_rules
     (NULL, 'other'           ,    25000,    10000),
     (   1, 'software'        ,  1000000,   100000),
     (   2, 'marketing'       ,  2500000,   250000);
->>>>>>> 08d74469fe20bb43266181098afee88b8f061d86
