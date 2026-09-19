@@ -1,9 +1,15 @@
-"""The spend rules themselves, as a typed constant.
+"""Resolving a spend rule for a (department, category).
 
-Rules are code, not rows: finance cannot change a limit without a deploy. That is a deliberate
-trade -- it keeps the rule set reviewable in git and lets the engine stay a pure function with
-no database behind it. `RuleSource` is the seam where a database-backed source drops in later
-without touching a single call site.
+Rules live in the `policy_rules` table so finance can change a limit from the dashboard.
+`RuleSource` is the seam that made that possible without touching a call site: `DbRuleSource`
+resolves against rows, `StaticRuleSource` against a literal mapping, and the engine cannot
+tell the difference.
+
+Nothing here touches the database. `DbRuleSource` takes a mapping that db/policies.py has
+already loaded, which is what keeps this package free of SQL and the engine a pure function.
+
+`DEFAULT_POLICY_RULES` is no longer read at runtime -- it is the seed, and the only definition
+of what a fresh database starts with.
 """
 
 from collections.abc import Mapping
@@ -22,8 +28,9 @@ ORG_FALLBACK = PolicyRule(
 # it against the claim, an expense with no receipt is an expense nothing can check.
 RECEIPT_REQUIRED_OVER_CENTS = 0
 
-# (department_id | None, category) -> rule. None means org-wide.
-POLICY_RULES: Mapping[tuple[int | None, str], PolicyRule] = MappingProxyType(
+# (department_id | None, category) -> rule. None means org-wide. Seed data only: what a fresh
+# database is populated with, never consulted once the table exists.
+DEFAULT_POLICY_RULES: Mapping[tuple[int | None, str], PolicyRule] = MappingProxyType(
     {
         # Org-wide defaults, one per category
         (None, "travel"): PolicyRule(300_000, 50_000),
@@ -45,11 +52,14 @@ POLICY_RULES: Mapping[tuple[int | None, str], PolicyRule] = MappingProxyType(
 
 
 def _assert_rules_coherent() -> None:
-    """An inverted pair would make the auto-approve band unreachable."""
-    for key, rule in POLICY_RULES.items():
+    """An inverted pair would make the auto-approve band unreachable.
+
+    The table carries the same rule as a CHECK, so this only guards the seed data.
+    """
+    for key, rule in DEFAULT_POLICY_RULES.items():
         if rule.auto_approve_limit_cents > rule.per_expense_limit_cents:
             raise ValueError(f"{key}: auto-approve limit exceeds per-expense limit")
-    missing = {c for _, c in POLICY_RULES} - set(CATEGORIES)
+    missing = {c for _, c in DEFAULT_POLICY_RULES} - set(CATEGORIES)
     if missing:
         raise ValueError(f"rules reference unknown categories: {sorted(missing)}")
 
@@ -62,11 +72,11 @@ class RuleSource(Protocol):
 
 
 class StaticRuleSource:
-    """Resolves against POLICY_RULES, most specific first."""
+    """Resolves against a literal mapping, most specific first. Used by tests and the seed."""
 
     def __init__(
         self,
-        rules: Mapping[tuple[int | None, str], PolicyRule] = POLICY_RULES,
+        rules: Mapping[tuple[int | None, str], PolicyRule] = DEFAULT_POLICY_RULES,
         fallback: PolicyRule = ORG_FALLBACK,
     ) -> None:
         self._rules = rules
@@ -80,24 +90,22 @@ class StaticRuleSource:
         )
 
 
-_default_source: RuleSource = StaticRuleSource()
+class DbRuleSource(StaticRuleSource):
+    """The live source. Takes rows already loaded by db.policies.rules_map().
 
-
-def default_rule_source() -> RuleSource:
-    return _default_source
+    A mapping rather than a connection on purpose: policy/ executes no SQL, so the engine
+    stays a pure function of the values handed to it.
+    """
 
 
 def overridden_categories(
     department_id: int,
-    rules: Mapping[tuple[int | None, str], PolicyRule] = POLICY_RULES,
+    rules: Mapping[tuple[int | None, str], PolicyRule],
 ) -> set[str]:
     """Categories where this department has its own rule instead of the org-wide one."""
     return {category for dept, category in rules if dept == department_id}
 
 
-def resolved_rules(
-    department_id: int, source: RuleSource | None = None
-) -> dict[str, PolicyRule]:
+def resolved_rules(department_id: int, source: RuleSource) -> dict[str, PolicyRule]:
     """Every category's effective rule for one department. Backs the finance policy table."""
-    src = source or default_rule_source()
-    return {category: src.rule_for(department_id, category) for category in CATEGORIES}
+    return {category: source.rule_for(department_id, category) for category in CATEGORIES}

@@ -4,9 +4,13 @@
 {% block page_title %}Spend policy{% endblock %}
 {% block page_subtitle %}
     <p class="page-sub">
-        Rules live in code (<code class="rounded bg-brand-soft px-1 py-0.5 text-xs text-brand-ink">policy/rules.py</code>),
-        so changing a limit is a deploy rather than an edit here. A department without its own rule
-        falls back to the org-wide default.
+        {% if may_edit %}
+            Edit a limit and save it. On a department, saving creates an override; removing one
+            hands the category back to the org-wide default.
+        {% else %}
+            The limits every expense is measured against. A department without its own rule falls
+            back to the org-wide default. Only finance can change these.
+        {% endif %}
     </p>
 {% endblock %}
 
@@ -14,22 +18,18 @@
     <form method="get" action="/policies" class="mb-6">
         <label class="label" for="department_id">Department</label>
         <div class="flex flex-wrap gap-1.5">
+            {# Distinct from the departments: this edits the defaults they inherit #}
+            <button type="submit" name="scope" value="org"
+                    class="btn btn-ghost btn-sm{% if org_wide %} is-on{% endif %}">
+                Org-wide defaults
+            </button>
             {% for department in departments %}
                 <button type="submit" name="department_id" value="{{ department.department_id }}"
-                        class="btn btn-ghost btn-sm{% if department.department_id == department_id %} is-on{% endif %}">
+                        class="btn btn-ghost btn-sm{% if not org_wide and department.department_id == department_id %} is-on{% endif %}">
                     {{ department.name }}
                 </button>
             {% endfor %}
         </div>
-        <select id="department_id" name="department_id" class="select sr-only"
-                onchange="this.form.submit()" tabindex="-1" aria-hidden="true">
-            {% for department in departments %}
-                <option value="{{ department.department_id }}"
-                        {% if department.department_id == department_id %}selected{% endif %}>
-                    {{ department.name }}
-                </option>
-            {% endfor %}
-        </select>
     </form>
 
     <div class="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
@@ -50,32 +50,57 @@
                 <thead>
                     <tr>
                         <th>Category</th>
-                        <th class="min-w-56">Bands</th>
+                        {% if not may_edit %}<th class="min-w-56">Bands</th>{% endif %}
                         <th class="num">Auto-approves under</th>
                         <th class="num">Blocked over</th>
+                        {% if may_edit %}<th class="w-px"></th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
                     {% set widest = rules.values() | map(attribute='per_expense_limit_cents') | max %}
                     {% for category, rule in rules.items() %}
-                        <tr>
+                        <tr data-category="{{ category }}"
+                            data-override="{{ 'true' if category in overrides else 'false' }}">
                             <td>
                                 <span class="font-medium">{{ category }}</span>
-                                {% if category in overrides %}
-                                    <span class="badge tone-brand ml-1.5"><span class="badge-dot"></span>override</span>
-                                {% endif %}
+                                <span class="badge tone-brand ml-1.5 {% if category not in overrides %}hidden{% endif %}"
+                                      data-badge><span class="badge-dot"></span>override</span>
                             </td>
-                            <td>
-                                {% set auto_pct = rule.auto_approve_limit_cents / widest * 100 %}
-                                {% set cap_pct = rule.per_expense_limit_cents / widest * 100 %}
-                                <div class="band">
-                                    <i class="zone-good" style="width: {{ '{:.1f}'.format(auto_pct) }}%"></i>
-                                    <i class="zone-warn" style="width: {{ '{:.1f}'.format(cap_pct - auto_pct) }}%"></i>
-                                    <i class="zone-crit" style="width: {{ '{:.1f}'.format(100 - cap_pct) }}%"></i>
-                                </div>
-                            </td>
-                            <td class="num">{{ money(rule.auto_approve_limit_cents) }}</td>
-                            <td class="num">{{ money(rule.per_expense_limit_cents) }}</td>
+
+                            {% if not may_edit %}
+                                <td>
+                                    {% set auto_pct = rule.auto_approve_limit_cents / widest * 100 %}
+                                    {% set cap_pct = rule.per_expense_limit_cents / widest * 100 %}
+                                    <div class="band">
+                                        <i class="zone-good" style="width: {{ '{:.1f}'.format(auto_pct) }}%"></i>
+                                        <i class="zone-warn" style="width: {{ '{:.1f}'.format(cap_pct - auto_pct) }}%"></i>
+                                        <i class="zone-crit" style="width: {{ '{:.1f}'.format(100 - cap_pct) }}%"></i>
+                                    </div>
+                                </td>
+                                <td class="num">{{ money(rule.auto_approve_limit_cents) }}</td>
+                                <td class="num">{{ money(rule.per_expense_limit_cents) }}</td>
+                            {% else %}
+                                <td class="num">
+                                    <input type="number" class="input input-num no-spin" data-field="auto" step="0.01" min="0"
+                                           value="{{ '{:.2f}'.format(rule.auto_approve_limit_cents / 100) }}"
+                                           aria-label="Auto-approve limit for {{ category }}">
+                                </td>
+                                <td class="num">
+                                    <input type="number" class="input input-num no-spin" data-field="cap" step="0.01" min="0.01"
+                                           value="{{ '{:.2f}'.format(rule.per_expense_limit_cents / 100) }}"
+                                           aria-label="Per-expense limit for {{ category }}">
+                                </td>
+                                <td>
+                                    <div class="flex justify-end gap-1.5">
+                                        <button type="button" class="btn btn-primary btn-sm" data-save>Save</button>
+                                        {# Only a department override can be removed; an org-wide rule
+                                           has nothing above it to fall back to #}
+                                        <button type="button"
+                                                class="btn btn-ghost btn-sm {% if org_wide or category not in overrides %}hidden{% endif %}"
+                                                data-remove>Remove</button>
+                                    </div>
+                                </td>
+                            {% endif %}
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -88,8 +113,88 @@
         <p class="m-0">
             Anything between the two limits goes to a manager. An expense that would push the
             department past its monthly budget also goes to a manager &mdash; it is never blocked
-            outright. Bands are drawn to a common scale, so a wider green band means a more
-            permissive category.
+            outright. Changing a limit only affects expenses submitted after the change; the
+            verdict already recorded against an existing expense never moves.
         </p>
     </div>
+{% endblock %}
+
+{% block scripts %}
+    {% if may_edit %}
+        <script>
+            const ORG_WIDE = {{ 'true' if org_wide else 'false' }};
+            const DEPARTMENT_ID = {{ department_id if department_id is not none else 'null' }};
+
+            const cents = (input) => Math.round(parseFloat(input.value || "0") * 100);
+            const dollars = (c) => (c / 100).toFixed(2);
+
+            function rowOf(button) {
+                return button.closest("tr");
+            }
+
+            async function send(row, method, body) {
+                const category = encodeURIComponent(row.dataset.category);
+                let url = `/api/policies/${category}`;
+                if (method === "DELETE") url += `?department_id=${DEPARTMENT_ID}`;
+                const options = { method };
+                if (body) {
+                    options.headers = { "Content-Type": "application/json" };
+                    options.body = JSON.stringify(body);
+                }
+                const response = await fetch(url, options);
+                const result = await response.json().catch(() => ({ error: "Request failed." }));
+                if (!response.ok) throw new Error(result.error || "That did not go through.");
+                return result;
+            }
+
+            // One place that redraws a row, so save and remove cannot disagree about how a
+            // reverted row should look
+            function paint(row, result) {
+                row.dataset.override = String(result.is_override);
+                row.querySelector("[data-field='auto']").value = dollars(result.auto_approve_limit_cents);
+                row.querySelector("[data-field='cap']").value = dollars(result.per_expense_limit_cents);
+                row.querySelector("[data-badge]").classList.toggle("hidden", !result.is_override);
+                const remove = row.querySelector("[data-remove]");
+                if (remove) remove.classList.toggle("hidden", ORG_WIDE || !result.is_override);
+            }
+
+            async function run(button, work, busyLabel) {
+                const row = rowOf(button);
+                const buttons = [...row.querySelectorAll("button")];
+                const original = button.textContent;
+                for (const b of buttons) b.disabled = true;
+                button.textContent = busyLabel;
+                try {
+                    paint(row, await work(row));
+                    return true;
+                } catch (error) {
+                    toast(error.message, "crit");
+                    return false;
+                } finally {
+                    for (const b of buttons) b.disabled = false;
+                    button.textContent = original;
+                }
+            }
+
+            for (const button of document.querySelectorAll("[data-save]")) {
+                button.addEventListener("click", async () => {
+                    const row = rowOf(button);
+                    const ok = await run(button, (r) => send(r, "PUT", {
+                        department_id: ORG_WIDE ? null : DEPARTMENT_ID,
+                        auto_approve_limit_cents: cents(r.querySelector("[data-field='auto']")),
+                        per_expense_limit_cents: cents(r.querySelector("[data-field='cap']")),
+                    }), "Saving…");
+                    if (ok) toast(`${row.dataset.category} updated.`, "good");
+                });
+            }
+
+            for (const button of document.querySelectorAll("[data-remove]")) {
+                button.addEventListener("click", async () => {
+                    const row = rowOf(button);
+                    const ok = await run(button, (r) => send(r, "DELETE"), "Removing…");
+                    if (ok) toast(`${row.dataset.category} reverted to the org-wide rule.`, "warn");
+                });
+            }
+        </script>
+    {% endif %}
 {% endblock %}

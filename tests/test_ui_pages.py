@@ -100,11 +100,13 @@ def test_finance_page_breaks_spend_down_by_category(client, sign_in):
 def test_policy_page_marks_a_department_override(client, sign_in):
     sign_in("marcus")  # Engineering, which overrides the software rule
     engineering = client.get("/policies?department_id=1").get_data(as_text=True)
-    assert "override" in engineering
+    # The attribute, not the word: every row carries a hidden override badge for the
+    # finance editor to unhide, so the bare substring is present either way
+    assert 'data-override="true"' in engineering
     # Sales has no rule of its own, so nothing is marked
-    assert "override" not in client.get("/policies?department_id=3").get_data(
-        as_text=True
-    )
+    assert 'data-override="true"' not in client.get(
+        "/policies?department_id=3"
+    ).get_data(as_text=True)
 
 
 def test_approvals_posts_decisions_to_the_api_route(client, sign_in):

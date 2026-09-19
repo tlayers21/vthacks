@@ -5,15 +5,17 @@ worse than no demo, so these assert the planted rows stay honest."""
 import pytest
 
 from db import expenses as expense_db
-from policy import RECEIPT_REQUIRED_OVER_CENTS, default_rule_source
+from policy import RECEIPT_REQUIRED_OVER_CENTS
+from services.policies import rule_source
 
 
 def seeded_expenses(db):
     return db.execute("SELECT * FROM expenses ORDER BY expense_id").fetchall()
 
 
-def rule_for(expense):
-    return default_rule_source().rule_for(expense["department_id"], expense["category"])
+def rule_for(expense, db):
+    """Resolved from the seeded policy_rules table -- the rules actually in force."""
+    return rule_source(db).rule_for(expense["department_id"], expense["category"])
 
 
 def test_seed_has_every_policy_decision(db):
@@ -29,20 +31,20 @@ def test_seed_has_every_status_the_ui_renders(db):
 def test_blocked_rows_really_exceed_their_cap(db):
     for expense in seeded_expenses(db):
         if expense["policy_decision"] == "blocked":
-            assert expense["amount_cents"] > rule_for(expense).per_expense_limit_cents
+            assert expense["amount_cents"] > rule_for(expense, db).per_expense_limit_cents
 
 
 def test_unblocked_rows_are_within_their_cap(db):
     for expense in seeded_expenses(db):
         if expense["policy_decision"] != "blocked":
-            assert expense["amount_cents"] <= rule_for(expense).per_expense_limit_cents
+            assert expense["amount_cents"] <= rule_for(expense, db).per_expense_limit_cents
 
 
 def test_auto_approved_rows_are_under_the_threshold_and_carry_no_violations(db):
     rows = [r for r in seeded_expenses(db) if r["policy_decision"] == "auto_approved"]
     violations = expense_db.violations_for(db, [r["expense_id"] for r in rows])
     for expense in rows:
-        assert expense["amount_cents"] <= rule_for(expense).auto_approve_limit_cents
+        assert expense["amount_cents"] <= rule_for(expense, db).auto_approve_limit_cents
         assert violations.get(expense["expense_id"], []) == []
 
 

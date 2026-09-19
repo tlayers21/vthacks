@@ -14,7 +14,18 @@ from api.deps import actor_with_role, current_user, get_conn, switchable_users
 from db import budget_requests as request_db
 from db import expenses as expense_db
 from db.ledger import transaction_ledger
+<<<<<<< HEAD
 from policy import CATEGORIES, overridden_categories, resolved_rules
+=======
+from policy import (
+    CATEGORIES,
+    RECEIPT_REQUIRED_OVER_CENTS,
+    overridden_categories,
+    resolved_rules,
+)
+from db import policies as policy_db
+from services import policies as policy_service
+>>>>>>> 08d74469fe20bb43266181098afee88b8f061d86
 from services.permissions import can_submit, default_scope, visible_expense_filter
 
 bp = Blueprint("ui", __name__)
@@ -166,19 +177,44 @@ def finance():
 
 @bp.get("/policies")
 def policies_page():
+    """?scope=org selects the org-wide defaults rather than a department.
+
+    A separate parameter rather than an absent department_id, so "no department chosen" and
+    "the org-wide set" cannot be confused with each other.
+    """
     actor = current_user()
-    requested = request.args.get("department_id", type=int)
-    department_id = requested or (actor["department_id"] if actor else None) or 1
     conn = get_conn()
+    org_wide = request.args.get("scope") == "org"
+
+    requested = request.args.get("department_id", type=int)
+    department_id = (
+        None
+        if org_wide
+        else requested or (actor["department_id"] if actor else None) or 1
+    )
+
     departments = conn.execute(
         "SELECT department_id, name FROM departments ORDER BY name"
     ).fetchall()
+    source = policy_service.rule_source(conn)
+
+    if org_wide:
+        # Resolving against a department that cannot exist yields the org-wide rule for every
+        # category, which is exactly the set being edited here
+        rules = resolved_rules(0, source)
+        overrides = set()
+    else:
+        rules = resolved_rules(department_id, source)
+        overrides = overridden_categories(department_id, policy_db.rules_map(conn))
+
     return render_template(
         "policies.html",
         departments=departments,
         department_id=department_id,
-        rules=resolved_rules(department_id),
-        overrides=overridden_categories(department_id),
+        org_wide=org_wide,
+        rules=rules,
+        overrides=overrides,
+        may_edit=actor is not None and actor["role"] == "Finance",
     )
 
 

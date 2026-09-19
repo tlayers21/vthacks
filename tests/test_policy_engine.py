@@ -156,18 +156,21 @@ def test_injected_rule_source_changes_the_outcome():
 
 
 def test_department_specific_rule_is_used():
+    """Against the shipped defaults, which is what a fresh database is seeded with."""
     # Engineering's software ceiling is higher than the org default
-    from policy import default_rule_source
+    defaults = StaticRuleSource()
 
     amount = 400_000
-    eng = evaluate_expense(draft(amount, "software"), budget(), default_rule_source())
+    eng = evaluate_expense(draft(amount, "software"), budget(), defaults)
     sales = ExpenseDraft(
-        customer_id="c1", department_id=3, amount_cents=amount, category="software"
+        customer_id="c1",
+        department_id=3,
+        amount_cents=amount,
+        category="software",
+        has_receipt=True,
     )
     assert eng.decision == "needs_approval"
-    assert (
-        evaluate_expense(sales, budget(), default_rule_source()).decision == "blocked"
-    )
+    assert evaluate_expense(sales, budget(), defaults).decision == "blocked"
 
 
 # -- receipts (spec 7.2) ---------------------------------------------------

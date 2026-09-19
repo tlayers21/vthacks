@@ -17,11 +17,11 @@ from .models import (
 )
 from .rules import (
     ORG_FALLBACK,
-    POLICY_RULES,
+    DEFAULT_POLICY_RULES,
+    DbRuleSource,
     RECEIPT_REQUIRED_OVER_CENTS,
     RuleSource,
     StaticRuleSource,
-    default_rule_source,
     overridden_categories,
     resolved_rules,
 )
@@ -30,7 +30,8 @@ __all__ = [
     "CATEGORIES",
     "DECISION_TO_STATUS",
     "ORG_FALLBACK",
-    "POLICY_RULES",
+    "DEFAULT_POLICY_RULES",
+    "DbRuleSource",
     "RECEIPT_REQUIRED_OVER_CENTS",
     "Decision",
     "DepartmentBudget",
@@ -42,7 +43,6 @@ __all__ = [
     "Severity",
     "StaticRuleSource",
     "Violation",
-    "default_rule_source",
     "evaluate_expense",
     "overridden_categories",
     "resolved_rules",

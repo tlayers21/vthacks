@@ -21,7 +21,11 @@ CREATE TABLE accounts (
 CREATE TABLE departments (
     department_id INTEGER PRIMARY KEY AUTOINCREMENT,
     name VARCHAR(100) NOT NULL UNIQUE,
-    monthly_budget_cents INTEGER NOT NULL DEFAULT 0,
+    monthly_budget_cents INTEGER NOT NULL DEFAULT 0 CHECK (monthly_budget_cents >= 0),
+    -- Finance can edit the budget directly, so the change carries an author for the same
+    -- reason policy_rules does: a ceiling nobody can attribute is not a control
+    budget_updated_by TEXT REFERENCES customers(nessie_id),
+    budget_updated_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     account_id TEXT NOT NULL,
     FOREIGN KEY (account_id) REFERENCES accounts(nessie_id)
@@ -109,6 +113,7 @@ CREATE TABLE expense_violations (
     FOREIGN KEY (expense_id) REFERENCES expenses(expense_id) ON DELETE CASCADE
 );
 
+<<<<<<< HEAD
 -- What a model read off a receipt, cached by the file hash rather than by the expense:
 -- services/receipts.py dedupes identical bytes to one file on disk, so they are one reading
 -- too, and a resubmitted receipt costs nothing. spec 8.1.
@@ -143,3 +148,33 @@ CREATE TABLE expense_flags (
     UNIQUE (expense_id, flag),
     FOREIGN KEY (expense_id) REFERENCES expenses(expense_id) ON DELETE CASCADE
 );
+=======
+-- Spend rules, previously a constant in policy/rules.py. They live here so finance can change a
+-- limit from the dashboard instead of shipping a deploy. department_id NULL is the org-wide
+-- default a department inherits when it has no override of its own.
+CREATE TABLE policy_rules (
+    policy_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    department_id INTEGER,
+    category TEXT NOT NULL CHECK (category IN (
+        'travel', 'food', 'client meals', 'software', 'equipment',
+        'marketing', 'training', 'office supplies', 'shipping', 'other'
+    )),
+    per_expense_limit_cents INTEGER NOT NULL CHECK (per_expense_limit_cents > 0),
+    auto_approve_limit_cents INTEGER NOT NULL CHECK (auto_approve_limit_cents >= 0),
+    -- Moving rules out of git loses the review trail that justified keeping them in code, so
+    -- every change records its author
+    updated_by TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- An inverted pair would make the auto-approve band unreachable
+    CHECK (auto_approve_limit_cents <= per_expense_limit_cents),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (updated_by) REFERENCES customers(nessie_id)
+);
+
+-- Two partial indexes rather than one UNIQUE(department_id, category): SQLite treats NULLs as
+-- distinct, so a plain constraint would allow any number of org-wide rules per category.
+CREATE UNIQUE INDEX idx_policy_rules_dept ON policy_rules (department_id, category)
+    WHERE department_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_policy_rules_org ON policy_rules (category)
+    WHERE department_id IS NULL;
+>>>>>>> 08d74469fe20bb43266181098afee88b8f061d86

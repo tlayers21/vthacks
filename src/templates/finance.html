@@ -76,19 +76,39 @@
     <h2 class="mt-9 mb-3 text-lg font-semibold tracking-tight">Department budgets</h2>
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {% for department in departments %}
-            <article class="card">
+            <article class="card" data-department="{{ department.department_id }}"
+                     data-committed="{{ department.committed_cents }}">
                 <div class="flex items-center justify-between gap-2">
                     <h3 class="font-semibold">{{ department.name }}</h3>
                 </div>
                 {{ budget_bar(department.committed_cents, department.monthly_budget_cents) }}
                 <p class="mt-1 text-sm">
                     {% set left = department.monthly_budget_cents - department.committed_cents %}
-                    {% if left < 0 %}
-                        <span class="font-semibold text-crit-ink">{{ money(-left) }} over budget</span>
-                    {% else %}
-                        <span class="text-muted">{{ money(left) }} remaining</span>
-                    {% endif %}
+                    <span data-remaining class="{% if left < 0 %}font-semibold text-crit-ink{% else %}text-muted{% endif %}">
+                        {% if left < 0 %}{{ money(-left) }} over budget{% else %}{{ money(left) }} remaining{% endif %}
+                    </span>
                 </p>
+
+                <div class="mt-3 border-t border-line pt-3">
+                    <label class="label" for="budget-{{ department.department_id }}">Monthly budget</label>
+                    <div class="flex items-center gap-1.5">
+                        <div class="relative grow">
+                            <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted">$</span>
+                            <input type="number" id="budget-{{ department.department_id }}"
+                                   class="input pl-6 no-spin" data-budget step="0.01" min="0"
+                                   value="{{ '{:.2f}'.format(department.monthly_budget_cents / 100) }}">
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" data-save-budget>Save</button>
+                    </div>
+                    {#- A ceiling, not cash: funding requests are what actually move money -#}
+                    <p class="mt-1.5 text-xs text-muted" data-budget-note>
+                        {% if department.budget_updated_by_name %}
+                            Last changed by {{ department.budget_updated_by_name }}.
+                        {% else %}
+                            Sets the spending ceiling. Use funding to move money.
+                        {% endif %}
+                    </p>
+                </div>
             </article>
         {% endfor %}
     </div>
@@ -136,4 +156,78 @@
             </table>
         </div>
     </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        const money = (cents) =>
+            "$" + (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        // Mirrors the budget_bar macro, so a saved card looks like a reloaded one
+        function repaint(card, result) {
+            const budget = result.monthly_budget_cents;
+            const committed = result.committed_cents;
+            const pct = budget ? (committed / budget) * 100 : 0;
+
+            const bar = card.querySelector(".bar");
+            bar.classList.toggle("over", pct > 100);
+            bar.classList.toggle("near", pct <= 100 && pct > 85);
+            bar.querySelector("span").style.width = Math.min(pct, 100) + "%";
+
+            const label = card.querySelector(".bar-label");
+            label.querySelector("span").textContent =
+                `${money(committed)} of ${money(budget)}`;
+            label.querySelector(".bar-pct").textContent = pct.toFixed(0) + "%";
+
+            const remaining = card.querySelector("[data-remaining]");
+            remaining.textContent = result.over_budget
+                ? `${money(-result.remaining_cents)} over budget`
+                : `${money(result.remaining_cents)} remaining`;
+            remaining.className = result.over_budget
+                ? "font-semibold text-crit-ink"
+                : "text-muted";
+        }
+
+        for (const button of document.querySelectorAll("[data-save-budget]")) {
+            button.addEventListener("click", async () => {
+                const card = button.closest("[data-department]");
+                const input = card.querySelector("[data-budget]");
+                const note = card.querySelector("[data-budget-note]");
+                const cents = Math.round(parseFloat(input.value || "0") * 100);
+
+                button.disabled = true;
+                button.textContent = "Saving…";
+                try {
+                    const response = await fetch(
+                        `/api/departments/${card.dataset.department}/budget`,
+                        {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ monthly_budget_cents: cents }),
+                        },
+                    );
+                    const result = await response.json().catch(() => ({ error: "Request failed." }));
+                    if (!response.ok) {
+                        toast(result.error || "That budget did not save.", "crit");
+                        return;
+                    }
+                    repaint(card, result);
+                    // Cutting a budget under what is already committed is allowed, but the
+                    // manager guard will start refusing approvals, so say so plainly
+                    if (result.over_budget) {
+                        note.textContent = "Now under what is already committed — approvals are blocked until funded.";
+                        toast("Budget saved. This department is now over budget.", "warn");
+                    } else {
+                        note.textContent = "Sets the spending ceiling. Use funding to move money.";
+                        toast("Budget saved.", "good");
+                    }
+                } catch {
+                    toast("Could not reach the server.", "crit");
+                } finally {
+                    button.disabled = false;
+                    button.textContent = "Save";
+                }
+            });
+        }
+    </script>
 {% endblock %}

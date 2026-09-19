@@ -9,6 +9,7 @@ import sqlite3
 from db import expenses as expense_db
 from db.connect import transaction
 from policy import DECISION_TO_STATUS, ExpenseDraft, PolicyResult, evaluate_expense
+from services import policies as policy_service
 from services.permissions import (
     Forbidden,
     InsufficientBudget,
@@ -87,9 +88,13 @@ def check_receipt(
 
 
 def preview_expense(conn: sqlite3.Connection, draft: ExpenseDraft) -> PolicyResult:
-    """Evaluate without writing anything. Backs the live preview on the submit form."""
+    """Evaluate without writing anything. Backs the live preview on the submit form.
+
+    The single funnel for real evaluation, which is why it is the one place that loads the
+    live rule set -- a submission can never be judged against a stale copy.
+    """
     budget = expense_db.department_budget(conn, draft.department_id)
-    return evaluate_expense(draft, budget)
+    return evaluate_expense(draft, budget, policy_service.rule_source(conn))
 
 
 def pay_expense(conn: sqlite3.Connection, expense_id: int, nessie=None) -> str:

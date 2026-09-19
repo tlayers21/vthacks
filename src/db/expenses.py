@@ -296,6 +296,7 @@ def department_spend_summary(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Budget vs. committed spend for every department. Backs the finance overview."""
     return conn.execute(
         f"SELECT d.department_id, d.name, d.monthly_budget_cents,"
+        f" editor.name AS budget_updated_by_name,"
         f" COALESCE(SUM("
         f"   CASE WHEN e.status IN ({','.join('?' * len(COMMITTED_STATUSES))})"
         f"         AND strftime('%Y-%m', e.submitted_at) = strftime('%Y-%m', 'now')"
@@ -303,6 +304,7 @@ def department_spend_summary(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         f" ), 0) AS committed_cents"
         f" FROM departments d"
         f" LEFT JOIN expenses e ON e.department_id = d.department_id"
+        f" LEFT JOIN customers editor ON editor.nessie_id = d.budget_updated_by"
         f" GROUP BY d.department_id ORDER BY d.name",
         COMMITTED_STATUSES,
     ).fetchall()

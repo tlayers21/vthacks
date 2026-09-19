@@ -23,9 +23,18 @@ def create_app(conn_factory=None, nessie=None, reader=None) -> Flask:
     # Tests hand in one connection and want the verdict before they assert on it.
     app.config["CHECK_ASYNC"] = conn_factory is None
 
-    from api.routes import auth, expenses, funding, policies, receipts, ui
+    from api.routes import (
+        auth,
+        departments,
+        expenses,
+        funding,
+        policies,
+        receipts,
+        ui,
+    )
 
     app.register_blueprint(auth.bp)
+    app.register_blueprint(departments.bp)
     app.register_blueprint(expenses.bp)
     app.register_blueprint(funding.bp)
     app.register_blueprint(policies.bp)
