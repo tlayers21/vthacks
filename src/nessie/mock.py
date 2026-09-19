@@ -3,6 +3,14 @@
 This is what tests run against, and what the demo falls back to if the sandbox is
 unreachable. Ids are sha1-derived from a per-kind counter so the same sequence of calls
 always produces the same ids -- tests can assert on them.
+
+DELIBERATELY STRICTER THAN THE LIVE SANDBOX. This mock actually moves money between
+accounts, rejects overdrafts, and rejects non-positive amounts. The real API does none
+of that -- it stores transaction records and never touches a balance (see the notes in
+client.py). So passing here is necessary but not sufficient: code that relies on Nessie
+balances changing will work against the mock and silently do nothing against `real`.
+Treat our own database as the source of truth for balances and this stays a useful
+stand-in rather than a misleading one.
 """
 
 import hashlib
@@ -153,3 +161,14 @@ class MockNessie:
             for t in self._transfers.values()
             if account_id in (t["payer_id"], t["payee_id"])
         ]
+
+    # -- housekeeping -------------------------------------------------------
+
+    def list_customers(self) -> list[Customer]:
+        return list(self._customers.values())
+
+    def list_accounts(self, customer_id: str) -> list[Account]:
+        return [a for a in self._accounts.values() if a["customer_id"] == customer_id]
+
+    def delete_account(self, account_id: str) -> None:
+        self._accounts.pop(account_id, None)

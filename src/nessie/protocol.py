@@ -79,3 +79,19 @@ class Nessie(Protocol):
     def list_transfers(self, account_id: str) -> list[Transfer]:
         """All transfers involving an account."""
         ...
+
+    def list_customers(self) -> list[Customer]:
+        """Every customer the API key can see."""
+        ...
+
+    def list_accounts(self, customer_id: str) -> list[Account]:
+        """Accounts owned by one customer."""
+        ...
+
+    def delete_account(self, account_id: str) -> None:
+        """Delete an account. Used by seeding to reclaim a previous run's accounts.
+
+        There is no matching delete for customers -- the live API has no such route --
+        so re-seeding reuses customers by name instead of creating duplicates.
+        """
+        ...

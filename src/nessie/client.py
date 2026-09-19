@@ -1,20 +1,32 @@
 """Real Nessie client.
 
-Endpoints, the `key` query parameter, and the customer/account payload shapes follow
-docs/nessie-reference.md. Built on stdlib urllib so the project needs no HTTP dependency
-and `seed.py` runs on a fresh checkout without anyone re-syncing their venv.
+Built on stdlib urllib so the project needs no HTTP dependency and `seed.py` runs on a
+fresh checkout without anyone re-syncing their venv.
 
-Two conversions happen here and nowhere else:
-  - money: our code speaks integer cents, Nessie speaks decimal dollars
-  - responses: Nessie mutations sometimes return the resource, sometimes an
-    acknowledgement wrapper {code, message, objectCreated: {...}} (see the reference's
-    "Notes on Responses"), so every create unwraps both shapes
+Three things about the live sandbox, each verified by probing it directly, that
+docs/nessie-reference.md does not mention:
+
+1. It is a record store, not a bank. Creating a transfer or a deposit persists a
+   document and leaves both account balances untouched. Our own database is therefore
+   authoritative for balances; Nessie is the audit trail.
+2. `TransferCreate` accepts only {transaction_date, status, amount, description} and
+   rejects `medium` and `payee_id` outright. There is no destination field, so the payee
+   is encoded into `description` and parsed back out by `list_transfers`.
+3. `amount` is truncated to a whole number (1.99 is stored as 1), so decimal dollars
+   silently lose cents. We send integer cents as the amount and treat that as Nessie's
+   unit throughout -- lossless, and self-consistent with the database.
+
+Responses are also not uniform: mutations return either the resource or an
+acknowledgement wrapper {code, message, objectCreated: {...}}, so every create unwraps
+both shapes, and list endpoints key the id as `id` while single fetches use `_id`.
 """
 
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date
 
 from config import settings
 
@@ -40,12 +52,24 @@ class NessieError(RuntimeError):
         self.body = body
 
 
-def _cents(dollars: float | int | None) -> int:
-    return round((dollars or 0) * 100)
+_PAYEE_TAG = re.compile(r"\s*\[payee:([^\]]+)\]\s*$")
 
 
-def _dollars(cents: int) -> float:
-    return round(cents / 100, 2)
+def _amount(value) -> int:
+    """Nessie amounts are already integer cents -- see the unit note in the docstring."""
+    return int(value or 0)
+
+
+def _tag_payee(description: str, payee_id: str) -> str:
+    """TransferCreate has no destination field, so carry it in the only free-text one."""
+    return f"{description} [payee:{payee_id}]".strip()
+
+
+def _untag_payee(description: str) -> tuple[str, str]:
+    match = _PAYEE_TAG.search(description or "")
+    if not match:
+        return description or "", ""
+    return _PAYEE_TAG.sub("", description).strip(), match.group(1)
 
 
 def _unwrap(payload):
@@ -134,7 +158,7 @@ class NessieClient:
                     "type": account_type,
                     "nickname": nickname,
                     "rewards": 0,
-                    "balance": _dollars(balance_cents),
+                    "balance": balance_cents,
                 },
             )
         )
@@ -142,12 +166,13 @@ class NessieClient:
             "id": created["_id"],
             "customer_id": customer_id,
             "nickname": created.get("nickname", nickname),
-            "balance_cents": _cents(created.get("balance")),
+            "balance_cents": _amount(created.get("balance")),
         }
 
     def get_balance(self, account_id: str) -> int:
+        """Nessie never updates this after creation -- our database owns live balances."""
         account = self._request("GET", f"/accounts/{account_id}")
-        return _cents(account.get("balance"))
+        return _amount(account.get("balance"))
 
     # -- money movement -----------------------------------------------------
 
@@ -163,21 +188,21 @@ class NessieClient:
                 "POST",
                 f"/accounts/{payer_id}/transfers",
                 {
-                    "medium": "balance",
-                    "payee_id": payee_id,
-                    "amount": _dollars(amount_cents),
+                    "transaction_date": date.today().isoformat(),
                     "status": "pending",
-                    "description": description,
+                    "amount": amount_cents,
+                    "description": _tag_payee(description, payee_id),
                 },
             )
         )
         return {
             "id": created["_id"],
+            # Echoed from the arguments: the record Nessie stores has neither side
             "payer_id": payer_id,
             "payee_id": payee_id,
-            "amount_cents": _cents(created.get("amount")) or amount_cents,
+            "amount_cents": _amount(created.get("amount")) or amount_cents,
             "status": created.get("status", "pending"),
-            "description": created.get("description", description),
+            "description": description,
         }
 
     def create_purchase(
@@ -194,23 +219,55 @@ class NessieClient:
                 {
                     "merchant_id": merchant_id,
                     "medium": "balance",
-                    "amount": _dollars(amount_cents),
+                    "amount": amount_cents,
                     "status": "pending",
                     "description": description,
                 },
             )
         )
 
-    def list_transfers(self, account_id: str) -> list[Transfer]:
-        rows = self._request("GET", f"/accounts/{account_id}/transfers") or []
+    # -- housekeeping -------------------------------------------------------
+
+    def list_customers(self) -> list[Customer]:
+        rows = self._request("GET", "/customers") or []
         return [
             {
-                "id": r["_id"],
-                "payer_id": r.get("payer_id", ""),
-                "payee_id": r.get("payee_id", ""),
-                "amount_cents": _cents(r.get("amount")),
-                "status": r.get("status", ""),
-                "description": r.get("description", ""),
+                "id": r.get("_id") or r.get("id", ""),
+                "first_name": r.get("first_name", ""),
+                "last_name": r.get("last_name", ""),
             }
             for r in rows
         ]
+
+    def list_accounts(self, customer_id: str) -> list[Account]:
+        rows = self._request("GET", f"/customers/{customer_id}/accounts") or []
+        return [
+            {
+                "id": r.get("_id") or r.get("id", ""),
+                "customer_id": customer_id,
+                "nickname": r.get("nickname", ""),
+                "balance_cents": _amount(r.get("balance")),
+            }
+            for r in rows
+        ]
+
+    def delete_account(self, account_id: str) -> None:
+        self._request("DELETE", f"/accounts/{account_id}")
+
+    def list_transfers(self, account_id: str) -> list[Transfer]:
+        rows = self._request("GET", f"/accounts/{account_id}/transfers") or []
+        transfers: list[Transfer] = []
+        for row in rows:
+            description, payee_id = _untag_payee(row.get("description", ""))
+            transfers.append(
+                {
+                    # List rows key the id as `id`; single fetches use `_id`
+                    "id": row.get("id") or row.get("_id", ""),
+                    "payer_id": account_id,
+                    "payee_id": payee_id,
+                    "amount_cents": _amount(row.get("amount")),
+                    "status": row.get("status", ""),
+                    "description": description,
+                }
+            )
+        return transfers

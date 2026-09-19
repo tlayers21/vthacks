@@ -2,7 +2,9 @@
 
 A company transaction-management app. Departments get budgets. Employees submit receipt-backed expenses, managers approve or reject them, and finance manages department budgets and requests. An AI assistant answers questions scoped to the user's role.
 
-**Nessie (Capital One's mock bank API) moves the money. Our own database stores everything else.**
+**Nessie (Capital One's mock bank API) records the money movement; our own database owns
+balances and everything else.** The original intent was for Nessie to hold balances, but the
+sandbox never updates them — see section 6, which documents the verified behaviour.
 
 Not included: inter-company invoices, real authentication (a role switcher is used), native mobile, split payments.
 
@@ -122,10 +124,43 @@ Without both you cannot tell a policy block from a manager rejection.
 
 ## 6. Nessie integration
 
+**Nessie does not move money. Our database is authoritative for balances; Nessie is the
+audit trail.** This contradicts the one-liner at the top of this document, and it is the
+single most important thing to know before writing code against it. The sandbox at
+`https://prod-api.nessieisreal.com` was probed directly on 2026-09-19; the findings below
+are verified behaviour, not documentation.
+
 - Accounts: one corporate, one per department, one per employee. IDs are stored on our rows.
-- `protocol.py` defines the interface: `create_customer`, `create_account`, `get_balance`, `create_transfer`, `create_purchase` (seeding only), `list_transfers`. `client.py` is the real implementation, `mock.py` is in-memory. `NESSIE_MODE=real|mock` switches them.
+- `protocol.py` defines the interface: `create_customer`, `create_account`, `get_balance`, `create_transfer`, `create_purchase` (seeding only), `list_transfers`, plus `list_customers`, `list_accounts`, `delete_account` for seed housekeeping. `client.py` is the real implementation, `mock.py` is in-memory. `NESSIE_MODE=real|mock` switches them.
 - Every Nessie transfer also writes a `transfers` row. The UI reads our database, not Nessie.
 - Payouts are idempotent: one transfer per expense, Nessie's ID saved before the status becomes `paid`. A failure sets `payout_failed` and allows a retry.
+
+### 6.1 Verified sandbox behaviour
+
+| Finding | Consequence |
+|---|---|
+| Creating a transfer or deposit leaves **both balances unchanged** | Never read a balance back to decide anything. `get_balance` returns the balance set at account creation, nothing more |
+| `TransferCreate` accepts only `{transaction_date, status, amount, description}` and **rejects `medium` and `payee_id`** | There is no destination field. `client.py` encodes the payee as a `[payee:<id>]` suffix on `description` and parses it back out in `list_transfers` |
+| `amount` is **truncated to a whole number** (`1.99` stores as `1`) | Decimal dollars lose cents. We send integer cents and treat that as Nessie's unit everywhere. No dollar conversion exists in the client |
+| List endpoints key the id as `id`; single fetches use `_id` | `client.py` accepts either |
+| Ids are **UUIDs**, not 24-char ObjectIds | Harmless — every id column is `TEXT` |
+| `POST /customers` accepts `{}`; all fields optional | The address we send is placeholder data |
+| `GET /merchants` is empty | `create_purchase` has no valid `merchant_id` available. Nothing calls it yet |
+
+### 6.2 The sandbox is shared and append-only
+
+The API key's data is global and persists across runs. `DELETE /accounts/{id}` and
+`DELETE /transfers/{id}` work, but **`DELETE /customers/{id}` does not exist** — it returns
+403 `Missing Authentication Token` and the customer survives. Seeding therefore used to
+strand 18 more customers on every run; we found 130, seven copies of each name.
+
+`seed.py --reset` now calls `reclaim_sandbox()` first: it matches customers by
+`(first_name, last_name)` against the seed org, deletes every account they own, and reuses
+the first matching customer instead of creating another. Accounts carry all the state that
+matters — balance, nickname, transfers — so recycling them is sufficient.
+
+Measured: a re-seed went from 130 accounts to 21, and a second run held at 21 rather than
+climbing to 148. Customer count cannot be reduced and stays flat.
 
 ## 7. Backend logic
 

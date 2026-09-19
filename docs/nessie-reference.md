@@ -6,7 +6,33 @@ Verified API reference for the Nessie banking simulation API.
 - **API base URL:** `https://prod-api.nessieisreal.com`
 - **Authentication:** API key passed as the `key` query parameter
 
-> The live documentation site currently renders as a JavaScript application, so its OpenAPI document could not be directly extracted here. The endpoint reference below was cross-checked against the official Nessie SDK repositories and a current typed Nessie SDK that tracks the API's OpenAPI contracts. Exact live schemas should still be checked in the interactive docs when available.
+> The live documentation site currently renders as a JavaScript application, so its OpenAPI document could not be directly extracted here. `/openapi.json` returns 403 even with a valid key. The endpoint reference below was cross-checked against the official Nessie SDK repositories and a current typed Nessie SDK that tracks the API's OpenAPI contracts. Exact live schemas should still be checked in the interactive docs when available.
+
+## ⚠ Live behaviour that contradicts this document
+
+Probed directly against the sandbox on 2026-09-19. **Where this section and the rest of this
+file disagree, this section is right** — the tables below describe the documented Nessie API,
+not the instance we actually talk to. See `docs/spec.md` §6.
+
+1. **Balances never change.** Creating a transfer, deposit, or withdrawal persists a record
+   and leaves both accounts' `balance` untouched. It is a record store, not a bank.
+2. **`TransferCreate` is `{transaction_date, status, amount, description}` — all required.**
+   It **rejects** `medium` and `payee_id` with `extra fields not permitted`. There is no
+   destination field of any kind, so a transfer cannot express "A pays B" on its own.
+   `DepositCreate` does require `medium`; `PurchaseCreate` requires `{merchant_id, medium,
+   amount}`. The three are not interchangeable.
+3. **`amount` truncates to a whole number.** `1.23` and `1.99` both store as `1`; `0.5`
+   stores as `0`. Treat the unit as integer cents and never send a decimal.
+4. **Ids are UUIDs**, not 24-character hex ObjectIds.
+5. **List endpoints key the id as `id`; single-resource fetches use `_id`.** Reading `_id`
+   off a list row raises `KeyError`.
+6. **`DELETE /customers/{id}` does not exist** — 403 `Missing Authentication Token`, and the
+   customer survives. `DELETE /accounts/{id}` and `DELETE /transfers/{id}` do work (200).
+7. **`POST /customers` accepts an empty body.** Every field, address included, is optional.
+8. **`GET /merchants` is empty**, so there is no valid `merchant_id` for purchases.
+
+The key's dataset is **shared and global** — every run's records persist and are visible to
+anyone using the same key.
 
 ---
 

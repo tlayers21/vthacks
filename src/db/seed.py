@@ -6,7 +6,10 @@ the ids Nessie hands back into app.db. Nobody maintains the org in two places.
 
     python db/seed.py                  # NESSIE_MODE from .env (defaults to mock)
     python db/seed.py --mode real      # create real customers/accounts in the sandbox
-    python db/seed.py --reset          # drop and rebuild app.db first
+    python db/seed.py --reset          # rebuild app.db, and reclaim the sandbox first
+
+`--reset` also deletes the accounts a previous run left in the Nessie sandbox and reuses
+its customers, so re-seeding does not strand a fresh set every time. See reclaim_sandbox.
 
 Offline alternative, no Nessie at all:
 
@@ -65,6 +68,34 @@ def opening_balance(account_id: str, org: dict) -> int:
     return balances[account_id]
 
 
+def reclaim_sandbox(nessie, org: dict) -> dict[tuple[str, str], str]:
+    """Delete accounts left by previous runs and return reusable customers, keyed by name.
+
+    The sandbox is shared and append-only: it has no delete route for customers, so every
+    re-seed used to strand another 18 of them (we found 130, seven copies of each name).
+    Accounts *can* be deleted, and they are what actually carries state -- balance,
+    nickname, transfers -- so we drop those and adopt the existing customer shells.
+    Net effect: customers stop multiplying and accounts stay at exactly one per customer.
+    """
+    wanted = {split_name(c["name"]) for c in org["customers"]}
+    reusable: dict[tuple[str, str], str] = {}
+    deleted = 0
+
+    for customer in nessie.list_customers():
+        key = (customer["first_name"], customer["last_name"])
+        if key not in wanted:
+            continue
+        for account in nessie.list_accounts(customer["id"]):
+            nessie.delete_account(account["id"])
+            deleted += 1
+        # First match wins; later duplicates are stranded but now account-free
+        reusable.setdefault(key, customer["id"])
+
+    if deleted or reusable:
+        print(f"reclaimed sandbox: deleted {deleted} accounts, reusing {len(reusable)} customers")
+    return reusable
+
+
 def seed(mode: str | None = None, reset: bool = False) -> None:
     org = load_reference_org()
     nessie = get_nessie(mode)
@@ -88,10 +119,17 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
     customer_ids: dict[str, str] = {}
     account_ids: dict[str, str] = {}
 
+    reusable = reclaim_sandbox(nessie, org) if reset else {}
+
     with transaction(conn):
         for customer in org["customers"]:
             first, last = split_name(customer["name"])
-            created = nessie.create_customer(first, last)
+            existing = reusable.get((first, last))
+            created = (
+                {"id": existing}
+                if existing
+                else nessie.create_customer(first, last)
+            )
             customer_ids[customer["nessie_id"]] = created["id"]
             conn.execute(
                 "INSERT INTO customers (nessie_id, name, role, department_id)"
