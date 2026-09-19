@@ -86,9 +86,14 @@ def _decide(violations: list[Violation]) -> Decision:
     return "auto_approved"
 
 
-# How the engine's verdict maps onto the expense lifecycle at insert time
+# How the engine's verdict maps onto the expense lifecycle at insert time.
+#
+# Nothing here refuses a submission. A 'blocked' expense is routed to its manager like any other,
+# wearing the block-severity violation that got it there -- only a person can reject spend, and
+# 'rejected' is reserved for what a person did. The verdict itself survives untouched in
+# expenses.policy_decision, so the engine's opinion is still on the record.
 DECISION_TO_STATUS: dict[Decision, str] = {
     "auto_approved": "approved",  # then 'paid' (or 'payout_failed') once the transfer settles
     "needs_approval": "needs_approval",
-    "blocked": "rejected",
+    "blocked": "needs_approval",
 }

@@ -45,3 +45,12 @@ def switchable_users(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         " WHERE c.department_id IS NOT NULL OR c.name = 'Dana Whitfield'"
         " ORDER BY CASE c.role WHEN 'Finance' THEN 0 WHEN 'Manager' THEN 1 ELSE 2 END, c.name"
     ).fetchall()
+
+
+def actor_with_role(*roles: str) -> sqlite3.Row | None:
+    """The acting user if their role is one of `roles`, else None for the caller to send home.
+
+    Hiding a page from the nav is decoration, not a permission.
+    """
+    actor = current_user()
+    return actor if actor is not None and actor["role"] in roles else None

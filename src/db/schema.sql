@@ -27,13 +27,25 @@ CREATE TABLE departments (
     FOREIGN KEY (account_id) REFERENCES accounts(nessie_id)
 );
 
+-- A manager asking finance for more department money. department_id is stored rather than read
+-- off the requester, for the same reason expenses denormalize it: the money was asked for by a
+-- department, not by wherever that manager sits later.
 CREATE TABLE budget_requests (
     request_id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id TEXT NOT NULL,
-    amount_cents INTEGER NOT NULL,
+    department_id INTEGER NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    reason TEXT,
     status TEXT NOT NULL CHECK (status IN ('Pending', 'Approved', 'Rejected')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (customer_id) REFERENCES customers(nessie_id)
+    decided_by TEXT,
+    decided_at TIMESTAMP,
+    decision_note TEXT,
+    -- Same idempotency guard as expenses: one approval can only ever fund one transfer
+    nessie_transfer_id TEXT UNIQUE,
+    FOREIGN KEY (customer_id) REFERENCES customers(nessie_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (decided_by) REFERENCES customers(nessie_id)
 );
 
 -- status is the lifecycle a manager can still move; policy_decision is the immutable record
@@ -61,6 +73,8 @@ CREATE TABLE expenses (
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     decided_by TEXT,
     decided_at TIMESTAMP,
+    -- Required when a manager rejects: a refusal the submitter cannot read is not a decision
+    decision_note TEXT,
     -- UNIQUE is the idempotency guard, enforced by the database rather than by remembering to
     -- check. SQLite allows many NULLs here, so unpaid rows are fine
     nessie_transfer_id TEXT UNIQUE,

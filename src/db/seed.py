@@ -92,7 +92,9 @@ def reclaim_sandbox(nessie, org: dict) -> dict[tuple[str, str], str]:
         reusable.setdefault(key, customer["id"])
 
     if deleted or reusable:
-        print(f"reclaimed sandbox: deleted {deleted} accounts, reusing {len(reusable)} customers")
+        print(
+            f"reclaimed sandbox: deleted {deleted} accounts, reusing {len(reusable)} customers"
+        )
     return reusable
 
 
@@ -126,9 +128,7 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
             first, last = split_name(customer["name"])
             existing = reusable.get((first, last))
             created = (
-                {"id": existing}
-                if existing
-                else nessie.create_customer(first, last)
+                {"id": existing} if existing else nessie.create_customer(first, last)
             )
             customer_ids[customer["nessie_id"]] = created["id"]
             conn.execute(
@@ -176,15 +176,25 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                     (customer["department_id"], customer_ids[customer["nessie_id"]]),
                 )
 
+        # No seeded request is Approved, so none of them carries a transfer to replay
         for request in org["budget_requests"]:
             conn.execute(
                 "INSERT INTO budget_requests"
-                " (request_id, customer_id, amount_cents, status) VALUES (?, ?, ?, ?)",
+                " (request_id, customer_id, department_id, amount_cents, reason, status,"
+                "  decided_by, decided_at, decision_note)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     request["request_id"],
                     customer_ids[request["customer_id"]],
+                    request["department_id"],
                     request["amount_cents"],
+                    request["reason"],
                     request["status"],
+                    customer_ids[request["decided_by"]]
+                    if request["decided_by"]
+                    else None,
+                    request["decided_at"],
+                    request["decision_note"],
                 ),
             )
 
@@ -195,7 +205,8 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
             conn.execute(
                 "INSERT INTO expenses"
                 " (expense_id, customer_id, department_id, amount_cents, category, merchant,"
-                "  description, status, policy_decision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "  description, status, policy_decision, decided_by, decided_at,"
+                "  decision_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     expense["expense_id"],
                     customer_ids[expense["customer_id"]],
@@ -206,6 +217,11 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                     expense["description"],
                     expense["status"],
                     expense["policy_decision"],
+                    customer_ids[expense["decided_by"]]
+                    if expense["decided_by"]
+                    else None,
+                    expense["decided_at"],
+                    expense["decision_note"],
                 ),
             )
 

@@ -9,7 +9,9 @@ from db import expenses as expense_db
 from services import expenses as expense_service
 from services.permissions import (
     Forbidden,
+    InsufficientBudget,
     can_decide,
+    can_view,
     default_scope,
     visible_expense_filter,
 )
@@ -83,12 +85,25 @@ def decide(expense_id: int):
 
     try:
         result = expense_service.decide_expense(
-            get_conn(), actor, expense_id, payload.approve, nessie=get_nessie()
+            get_conn(),
+            actor,
+            expense_id,
+            payload.approve,
+            payload.note,
+            nessie=get_nessie(),
         )
     except KeyError:
         return jsonify(error="no such expense"), 404
     except Forbidden as exc:
         return jsonify(error=str(exc)), 403
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    except InsufficientBudget as exc:
+        # 409, not 403: the manager is allowed to do this, the department just cannot afford it
+        return jsonify(
+            error="this department is out of budget for the month",
+            shortfall_cents=exc.shortfall_cents,
+        ), 409
     return jsonify(result)
 
 
@@ -102,7 +117,8 @@ def retry_payout(expense_id: int):
     expense = expense_db.get_expense(conn, expense_id)
     if expense is None:
         return jsonify(error="no such expense"), 404
-    if not _may_view(actor, expense):
+    # Narrower than can_view: retrying moves money, and finance only watches
+    if actor["nessie_id"] != expense["customer_id"] and not can_decide(actor, expense):
         return jsonify(error="not yours"), 403
     if expense["status"] != "payout_failed":
         return jsonify(error=f"expense is {expense['status']}, not payout_failed"), 409
@@ -120,11 +136,7 @@ def get_one(expense_id: int):
     expense = expense_db.get_expense(conn, expense_id)
     if expense is None:
         return jsonify(error="no such expense"), 404
-    if not _may_view(actor, expense):
+    if not can_view(actor, expense):
         return jsonify(error="not yours"), 403
     violations = expense_db.violations_for(conn, [expense_id]).get(expense_id, [])
     return jsonify({**dict(expense), "violations": violations})
-
-
-def _may_view(actor, expense) -> bool:
-    return actor["nessie_id"] == expense["customer_id"] or can_decide(actor, expense)

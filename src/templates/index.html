@@ -1,30 +1,28 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icon, role_badge %}
-{% block title %}Acme spend{% endblock %}
+{% from "_macros.html" import icon, role_badge, brand_mark %}
+{% block title %}Nessence{% endblock %}
 
 {% block signed_out %}
     <div class="mx-auto max-w-5xl px-5 py-14 sm:py-20">
         <div class="flex items-center gap-2.5">
-            <span class="grid h-9 w-9 place-items-center rounded-lg bg-brand text-white">
-                {{ icon('wallet', 'nav-icon') }}
-            </span>
-            <span class="text-lg font-semibold tracking-tight">Acme spend</span>
+            {{ brand_mark(brand_assets, 'h-10 w-10') }}
+            <span class="text-lg font-semibold tracking-tight">Nessence</span>
         </div>
 
         <h1 class="mt-10 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-            Spend control that decides
-            <span class="text-brand-ink">before</span> anyone asks.
+            Every dollar has
+            <span class="text-brand-ink">one</span> person who owns it.
         </h1>
         <p class="mt-5 max-w-2xl text-lg text-muted">
-            Employees submit expenses, the policy engine settles what it can, and managers only
-            ever see the handful of things the rules could not decide on their own.
+            Employees spend, managers decide, finance funds the departments. Nobody does two of
+            those, and every transfer lands in Capital One&rsquo;s Nessie as the audit trail.
         </p>
 
         <div class="mt-12 grid gap-4 sm:grid-cols-3">
             {% set steps = [
-                ('receipt', 'Submit', 'An employee files an expense and sees the policy verdict live, before they ever press send.'),
-                ('shield', 'The engine decides', 'Per-expense caps, auto-approve thresholds and the department budget all run on every submission.'),
-                ('clock', 'A human, only if needed', 'Auto-approved expenses pay out immediately. Everything else lands in one manager queue with its reasons attached.'),
+                ('receipt', 'Employees submit', 'File an expense against the department budget. Nothing is ever refused by the machine.'),
+                ('clock', 'Managers decide', 'One queue, with the rules that flagged each row attached. A rejection carries a reason.'),
+                ('coins', 'Finance funds', 'A department out of budget cannot approve anything until finance tops it up.'),
             ] %}
             {% for name, heading, body in steps %}
                 <div class="card">

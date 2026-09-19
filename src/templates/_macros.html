@@ -9,9 +9,25 @@
     'blocked': 'crit',
     'rejected': 'crit',
     'payout_failed': 'crit',
+    'Approved': 'good',
+    'Pending': 'warn',
+    'Rejected': 'crit',
+    'allocation': 'accent',
+    'reimbursement': 'neutral',
 } -%}
 
 {%- set ROLE_TONE = {'Finance': 'brand', 'Manager': 'warn', 'Employee': 'neutral'} -%}
+
+{#- What a submitter is told. The lifecycle has five states because the money does, but an
+    employee only ever needs three -- and 'auto approved' is not one of them, because whether a
+    person looked at it is nobody's business but the department's. -#}
+{%- set SUBMITTER_STATUS = {
+    'needs_approval': 'pending review',
+    'approved': 'approved',
+    'paid': 'approved',
+    'payout_failed': 'approved',
+    'rejected': 'rejected',
+} -%}
 
 
 {% macro money(cents) %}${{ '{:,.2f}'.format((cents or 0) / 100) }}{% endmacro %}
@@ -38,8 +54,35 @@
 {% endmacro %}
 
 
+{#- The same row reads differently depending on who is looking at it -#}
+{% macro status_badge(status, for_submitter) %}
+    {%- if for_submitter -%}
+        {%- set label = SUBMITTER_STATUS.get(status, status) -%}
+        <span class="badge tone-{{ BADGE_TONE.get(label.replace(' ', '_'), BADGE_TONE.get(status, 'neutral')) }}">
+            <span class="badge-dot"></span>{{ label }}
+        </span>
+    {%- else -%}
+        {{ badge(status) }}
+    {%- endif -%}
+{% endmacro %}
+
+
 {% macro role_badge(role) %}
     <span class="badge tone-{{ ROLE_TONE.get(role, 'neutral') }}"><span class="badge-dot"></span>{{ role }}</span>
+{% endmacro %}
+
+
+{#- The logo if one has been dropped into static/brand, otherwise the built-in mark. The PNG is
+    already cut to a circle with transparent corners, so it sits on any surface unboxed. -#}
+{% macro brand_mark(assets, size='h-8 w-8') %}
+    {% if 'logo' in assets %}
+        <img src="{{ url_for('static', filename='brand/logo.png') }}" alt=""
+             class="{{ size }} flex-none rounded-full" width="512" height="512">
+    {% else %}
+        <span class="grid {{ size }} flex-none place-items-center rounded-lg bg-brand text-on-brand">
+            {{ icon('wallet', 'nav-icon') }}
+        </span>
+    {% endif %}
 {% endmacro %}
 
 
@@ -147,6 +190,11 @@
             <path d="M5 12h14M13 6l6 6-6 6"/>
         {%- elif name == 'refresh' -%}
             <path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/>
+        {%- elif name == 'coins' -%}
+            <ellipse cx="9" cy="6.5" rx="5.5" ry="2.5"/><path d="M3.5 6.5v5c0 1.4 2.5 2.5 5.5 2.5"/>
+            <ellipse cx="15" cy="14" rx="5.5" ry="2.5"/><path d="M9.5 14v3.5c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5V14"/>
+        {%- elif name == 'exchange' -%}
+            <path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>
         {%- elif name == 'sparkle' -%}
             <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>
         {%- endif -%}

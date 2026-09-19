@@ -65,6 +65,47 @@ def test_settled_payouts_are_replayed_into_the_balances(db):
     )
 
 
+def test_an_approved_allocation_is_not_counted_twice_after_a_restart(db):
+    """monthly_budget_cents already holds the allocation, and the replay adds it again.
+
+    Opening from the raised budget would hand Marketing the same $20,000 twice.
+    """
+    department = db.execute(
+        "SELECT * FROM departments WHERE department_id = 2"
+    ).fetchone()
+    corporate = db.execute(
+        "SELECT a.nessie_id FROM accounts a JOIN customers c ON c.nessie_id = a.customer_id"
+        " WHERE c.name = 'Nessence Corporation'"
+    ).fetchone()["nessie_id"]
+
+    before = MockNessie()
+    hydrate_mock_accounts(db, before)
+    corporate_opening = before.get_balance(corporate)
+
+    db.execute(
+        "UPDATE budget_requests SET status = 'Approved',"
+        " nessie_transfer_id = 'feedfacefeedfacefeedface' WHERE request_id = 1"
+    )
+    db.execute(
+        "UPDATE departments SET monthly_budget_cents = monthly_budget_cents + ("
+        "    SELECT amount_cents FROM budget_requests WHERE request_id = 1"
+        ") WHERE department_id = 2"
+    )
+    db.commit()
+    allocated = db.execute(
+        "SELECT amount_cents FROM budget_requests WHERE request_id = 1"
+    ).fetchone()["amount_cents"]
+
+    restarted = MockNessie()
+    hydrate_mock_accounts(db, restarted)
+
+    assert (
+        restarted.get_balance(department["account_id"])
+        == before.get_balance(department["account_id"]) + allocated
+    )
+    assert restarted.get_balance(corporate) == corporate_opening - allocated
+
+
 def test_a_fresh_mock_never_reissues_a_transfer_id_the_database_holds(db):
     """MockNessie's counter restarts at 1 every process. Against a database seeded by an
     earlier run, that would regenerate an id already stored and trip the UNIQUE constraint."""

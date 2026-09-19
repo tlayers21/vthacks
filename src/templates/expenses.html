@@ -1,15 +1,22 @@
 {% extends "base.html" %}
-{% from "_macros.html" import money, money_short, badge, violation_list, category_chip, empty_state, icon %}
+{% from "_macros.html" import money, money_short, badge, status_badge, violation_list, category_chip, empty_state, icon %}
+
+{#- An employee is looking at their own submissions; everyone else is reviewing someone's -#}
+{% set as_submitter = actor.role == 'Employee' %}
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block page_subtitle %}
     <p class="page-sub">
-        Every submission with the verdict the policy engine gave it, and why.
+        {% if as_submitter %}
+            Everything you have filed, and where each one got to.
+        {% else %}
+            Every submission with the verdict the policy engine gave it, and why.
+        {% endif %}
     </p>
 {% endblock %}
 
 {% block page_actions %}
-    {% if actor.department_id %}
+    {% if may_submit %}
         <a href="/expenses/new" class="btn btn-primary">{{ icon('plus', 'nav-icon') }}New expense</a>
     {% endif %}
 {% endblock %}
@@ -38,12 +45,12 @@
                 <p class="stat-sub">{{ money(totals.all) }}</p>
             </div>
             <div class="stat {% if totals.pending_count %}tone-warn{% endif %}">
-                <p class="stat-label">Awaiting approval</p>
+                <p class="stat-label">{{ 'Pending review' if as_submitter else 'Awaiting approval' }}</p>
                 <p class="stat-value">{{ totals.pending_count }}</p>
                 <p class="stat-sub">{{ money(totals.pending) }} held up</p>
             </div>
             <div class="stat tone-good">
-                <p class="stat-label">Paid out</p>
+                <p class="stat-label">{{ 'Reimbursed' if as_submitter else 'Paid out' }}</p>
                 <p class="stat-value">{{ money_short(totals.paid) }}</p>
             </div>
         </div>
@@ -59,9 +66,11 @@
             </div>
 
             <div class="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
-                {% for value, label in [('', 'All'), ('needs_approval', 'Pending'), ('paid', 'Paid'),
-                                        ('approved', 'Approved'), ('rejected', 'Rejected'),
-                                        ('payout_failed', 'Payout failed')] %}
+                {% set filters = [('', 'All'), ('needs_approval', 'Pending review'), ('rejected', 'Rejected')]
+                    if as_submitter else
+                    [('', 'All'), ('needs_approval', 'Pending'), ('paid', 'Paid'),
+                     ('approved', 'Approved'), ('rejected', 'Rejected'), ('payout_failed', 'Payout failed')] %}
+                {% for value, label in filters %}
                     <button type="button" class="btn btn-ghost btn-sm status-filter{% if not value %} is-on{% endif %}"
                             data-status="{{ value }}">{{ label }}</button>
                 {% endfor %}
@@ -85,8 +94,7 @@
                             <th class="num">Amount</th>
                             <th>Date</th>
                             <th>Status</th>
-                            <th>Policy</th>
-                            {% if actor.role != 'Employee' %}<th>Submitted by</th>{% endif %}
+                            {% if not as_submitter %}<th>Policy</th><th>Submitted by</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody id="expense-rows">
@@ -107,19 +115,27 @@
                                 <td class="num font-medium">{{ money(expense.amount_cents) }}</td>
                                 <td class="whitespace-nowrap text-muted">{{ expense.submitted_at[:10] }}</td>
                                 <td>
-                                    {{ badge(expense.status) }}
-                                    {% if expense.status == 'payout_failed' %}
+                                    {{ status_badge(expense.status, as_submitter) }}
+                                    {% if expense.status == 'rejected' and expense.decision_note %}
+                                        <span class="mt-1.5 block max-w-xs text-xs text-crit-ink">
+                                            {{ expense.decision_note }}
+                                            {%- if expense.decider_name %}
+                                                <span class="text-muted">&mdash; {{ expense.decider_name }}</span>
+                                            {%- endif %}
+                                        </span>
+                                    {% endif %}
+                                    {% if expense.status == 'payout_failed' and not as_submitter %}
                                         <button type="button" class="btn btn-ghost btn-sm mt-1.5"
                                                 data-retry="{{ expense.expense_id }}">
                                             {{ icon('refresh', 'nav-icon') }}Retry
                                         </button>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    {{ badge(expense.policy_decision) }}
-                                    {{ violation_list(violations.get(expense.expense_id, [])) }}
-                                </td>
-                                {% if actor.role != 'Employee' %}
+                                {% if not as_submitter %}
+                                    <td>
+                                        {{ badge(expense.policy_decision) }}
+                                        {{ violation_list(violations.get(expense.expense_id, [])) }}
+                                    </td>
                                     <td>
                                         <span class="whitespace-nowrap">{{ expense.submitter_name }}</span>
                                         <span class="mt-0.5 block text-xs text-muted">{{ expense.department_name }}</span>
@@ -135,7 +151,7 @@
             </p>
         </div>
     {% else %}
-        {{ empty_state('Nothing here yet.', 'Submitted expenses and their policy verdicts will show up here.') }}
+        {{ empty_state('Nothing here yet.', 'Expenses show up here once they are filed.') }}
     {% endif %}
 {% endblock %}
 
@@ -203,9 +219,7 @@
         const submitted = new URLSearchParams(location.search).get("submitted");
         if (submitted) {
             const row = document.querySelector(`[data-expense-id="${submitted}"]`);
-            const status = row?.dataset.status ?? "";
-            toast(`Expense submitted — ${status.replace("_", " ") || "recorded"}.`,
-                  { paid: "good", rejected: "crit" }[status] ?? "warn");
+            toast("Submitted — pending review.", "good");
             row?.scrollIntoView({ block: "center", behavior: "smooth" });
         }
     </script>

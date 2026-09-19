@@ -129,20 +129,26 @@ def set_status(conn: sqlite3.Connection, expense_id: int, status: str) -> None:
 
 
 def record_decision(
-    conn: sqlite3.Connection, expense_id: int, status: str, decided_by: str
+    conn: sqlite3.Connection,
+    expense_id: int,
+    status: str,
+    decided_by: str,
+    note: str | None = None,
 ) -> None:
     conn.execute(
-        "UPDATE expenses SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP"
-        " WHERE expense_id = ?",
-        (status, decided_by, expense_id),
+        "UPDATE expenses SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP,"
+        " decision_note = ? WHERE expense_id = ?",
+        (status, decided_by, note, expense_id),
     )
 
 
 _LIST_SQL = """
-SELECT e.*, c.name AS submitter_name, d.name AS department_name
+SELECT e.*, c.name AS submitter_name, d.name AS department_name,
+       decider.name AS decider_name
 FROM expenses e
 JOIN customers c ON c.nessie_id = e.customer_id
 JOIN departments d ON d.department_id = e.department_id
+LEFT JOIN customers decider ON decider.nessie_id = e.decided_by
 """
 
 

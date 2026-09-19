@@ -1,11 +1,30 @@
-{% from "_macros.html" import icon, nav_link, role_badge %}
+{% from "_macros.html" import icon, nav_link, role_badge, brand_mark %}
 <!doctype html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}Nessence{% endblock %}</title>
-        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%234f46e5'/%3E%3Cpath d='M5 9a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z' fill='none' stroke='white' stroke-width='1.6'/%3E%3Ccircle cx='15' cy='12.5' r='1' fill='white'/%3E%3C/svg%3E">
+        {#- Drop-in brand images live in static/brand; see its README. Each one falls back rather
+            than 404ing, so the app looks finished with an empty folder too. -#}
+        {% if 'favicon' in brand_assets %}
+            <link rel="icon" type="image/png" href="{{ url_for('static', filename='brand/favicon.png') }}">
+        {% else %}
+            <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%2308254c'/%3E%3Cpath d='M5 9a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z' fill='none' stroke='white' stroke-width='1.6'/%3E%3Ccircle cx='15' cy='12.5' r='1' fill='white'/%3E%3C/svg%3E">
+        {% endif %}
+        {% if 'apple-touch-icon' in brand_assets %}
+            <link rel="apple-touch-icon" href="{{ url_for('static', filename='brand/apple-touch-icon.png') }}">
+        {% endif %}
+        <meta name="theme-color" content="#08254c">
+        <meta property="og:type" content="website">
+        <meta property="og:title" content="Nessence">
+        <meta property="og:description"
+              content="Spend control where every role has exactly one job.">
+        {% if 'og-image' in brand_assets %}
+            <meta property="og:image"
+                  content="{{ url_for('static', filename='brand/og-image.png', _external=True) }}">
+            <meta name="twitter:card" content="summary_large_image">
+        {% endif %}
         <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,16 +35,31 @@
             @theme {
                 --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
+                /* Navy ground, blue accent, teal for Nessie -- the logo's own three colours.
+                   Ink is the navy rather than a neutral slate, so text and brand sit in one
+                   family instead of two. */
                 --color-page: #f8fafc;
                 --color-surface: #ffffff;
-                --color-line: #e2e8f0;
-                --color-ink: #0f172a;
-                --color-ink-soft: #334155;
+                --color-line: #d9e3ee;
+                --color-ink: #08254c;
+                --color-ink-soft: #2e4a75;
                 --color-muted: #64748b;
 
-                --color-brand: #4f46e5;
-                --color-brand-ink: #4338ca;
-                --color-brand-soft: #eef2ff;
+                --color-brand: #0c77d5;
+                /* A darker step, not the navy: brand-ink is emphasis text, and matching --ink
+                   would make it disappear into the sentence around it */
+                --color-brand-ink: #0a5ea8;
+                --color-brand-soft: #eaf3fd;
+                /* Label colour for anything filled with --color-brand. A token because the two
+                   modes disagree: white clears 4.5:1 on the mid blue but only 3.1:1 on the
+                   bright one, where the navy gets 4.9:1 instead. */
+                --color-on-brand: #ffffff;
+
+                /* The teal the creature is drawn in. Secondary, and only ever for money
+                   arriving from the corporation -- it is not a fourth status colour. */
+                --color-accent: #35c9a3;
+                --color-accent-ink: #0e7a62;
+                --color-accent-soft: #e6f8f3;
 
                 /* Status steps from the data-viz status palette -- never reused as series colors */
                 --color-good: #0ca30c;
@@ -44,23 +78,32 @@
             /* Dark mode re-steps the same tokens, so components never need a dark: variant */
             @media (prefers-color-scheme: dark) {
                 :root {
-                    --color-page: #09090b;
-                    --color-surface: #18181b;
-                    --color-line: #27272a;
-                    --color-ink: #fafafa;
-                    --color-ink-soft: #d4d4d8;
-                    --color-muted: #a1a1aa;
+                    /* Dark is the brand navy, not a neutral black -- the logo sits on this
+                       exact colour, so the mark dissolves into the page instead of floating
+                       on a dark square */
+                    --color-page: #051d3f;
+                    --color-surface: #08254c;
+                    --color-line: #14396e;
+                    --color-ink: #f1f6fc;
+                    --color-ink-soft: #c6d7ec;
+                    --color-muted: #8ba4c2;
 
-                    --color-brand: #818cf8;
-                    --color-brand-ink: #a5b4fc;
-                    --color-brand-soft: #1e1b4b;
+                    --color-brand: #2196f3;
+                    --color-brand-ink: #7fc4f9;
+                    --color-brand-soft: #0c3a70;
+                    --color-on-brand: #08254c;
 
+                    --color-accent: #35c9a3;
+                    --color-accent-ink: #98d3d8;
+                    --color-accent-soft: #0b3a33;
+
+                    /* Status softs re-tinted toward navy, or they read as mud on this surface */
                     --color-good-ink: #4ade80;
                     --color-warn-ink: #fcd34d;
                     --color-crit-ink: #fca5a5;
-                    --color-good-soft: #0f2a16;
-                    --color-warn-soft: #2e2410;
-                    --color-crit-soft: #331617;
+                    --color-good-soft: #0c3a2e;
+                    --color-warn-soft: #3a2f12;
+                    --color-crit-soft: #421c22;
                 }
             }
 
@@ -93,6 +136,7 @@
                 .tone-warn { background: var(--color-warn-soft); color: var(--color-warn-ink); }
                 .tone-crit { background: var(--color-crit-soft); color: var(--color-crit-ink); }
                 .tone-brand { background: var(--color-brand-soft); color: var(--color-brand-ink); }
+                .tone-accent { background: var(--color-accent-soft); color: var(--color-accent-ink); }
                 .tone-neutral { background: color-mix(in oklab, var(--color-muted) 14%, transparent); color: var(--color-ink-soft); }
 
                 .chip {
@@ -163,6 +207,7 @@
                 .stat.tone-warn .stat-value { color: var(--color-warn-ink); }
                 .stat.tone-crit .stat-value { color: var(--color-crit-ink); }
                 .stat.tone-brand .stat-value { color: var(--color-brand-ink); }
+                .stat.tone-accent .stat-value { color: var(--color-accent-ink); }
 
                 /* -- empty state --------------------------------------------- */
                 .empty {
@@ -179,24 +224,18 @@
 
                 .page-sub { margin: 0.375rem 0 0; max-width: 42rem; font-size: 0.875rem; color: var(--color-muted); }
 
-                /* -- live policy preview -------------------------------------- */
-                /* Keyed off data-state rather than className so the JS cannot wipe the utilities */
+                /* -- submit-form echo ----------------------------------------- */
+                /* One appearance, always. It used to carry the engine's verdict in its border
+                   colour, which told the submitter which amount to type instead. */
                 .preview {
                     border: 1px solid var(--color-line);
-                    border-left-width: 4px;
+                    border-left: 4px solid var(--color-brand);
                     border-radius: 0.75rem;
                     padding: 0.9rem 1rem;
                     background: var(--color-surface);
-                    transition: border-color 140ms ease;
                 }
                 .preview-head { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-weight: 600; }
                 .preview-head .icon { width: 1.1rem; height: 1.1rem; }
-                .preview[data-state="auto_approved"] { border-left-color: var(--color-good); }
-                .preview[data-state="auto_approved"] .preview-head { color: var(--color-good-ink); }
-                .preview[data-state="needs_approval"] { border-left-color: var(--color-warn); }
-                .preview[data-state="needs_approval"] .preview-head { color: var(--color-warn-ink); }
-                .preview[data-state="blocked"] { border-left-color: var(--color-crit); }
-                .preview[data-state="blocked"] .preview-head { color: var(--color-crit-ink); }
 
                 /* -- policy band (auto-approve / needs approval / blocked) ------ */
                 .band { display: flex; height: 0.5rem; border-radius: 999px; overflow: hidden; gap: 2px; }
@@ -237,7 +276,7 @@
                     transition: filter 120ms ease, background-color 120ms ease;
                 }
                 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-                .btn-primary { background: var(--color-brand); color: #fff; }
+                .btn-primary { background: var(--color-brand); color: var(--color-on-brand); }
                 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
                 .btn-good { background: var(--color-good); color: #fff; }
                 .btn-good:hover:not(:disabled) { filter: brightness(1.08); }
@@ -246,7 +285,7 @@
                 .btn-danger { background: transparent; border-color: color-mix(in oklab, var(--color-crit) 45%, transparent); color: var(--color-crit-ink); }
                 .btn-danger:hover:not(:disabled) { background: var(--color-crit-soft); }
                 .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8125rem; border-radius: 0.5rem; }
-                .btn.is-on { background: var(--color-brand); border-color: var(--color-brand); color: #fff; }
+                .btn.is-on { background: var(--color-brand); border-color: var(--color-brand); color: var(--color-on-brand); }
 
                 .label { display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.35rem; }
                 .input, .select, .textarea {
@@ -306,16 +345,19 @@
     </head>
     <body data-cloak class="min-h-screen bg-page text-ink font-sans antialiased">
         {% set role = actor.role if actor else None %}
+        {#- One job per role, and the nav is the shortest statement of it. Each of these is also
+            guarded in api/routes/ui.py -- leaving a link out is not a permission. -#}
         {% set nav_items = {
             'Employee': [('/expenses/new', 'New expense', 'plus'),
                          ('/expenses/mine', 'My expenses', 'receipt'),
                          ('/policies', 'Policies', 'shield')],
             'Manager':  [('/approvals', 'Approvals', 'clock'),
+                         ('/funding', 'Funding', 'coins'),
                          ('/expenses/all', 'Team spend', 'chart'),
-                         ('/expenses/new', 'New expense', 'plus'),
                          ('/policies', 'Policies', 'shield')],
             'Finance':  [('/finance', 'Overview', 'chart'),
-                         ('/expenses/all', 'All expenses', 'receipt'),
+                         ('/funding', 'Funding requests', 'coins'),
+                         ('/transactions', 'Transactions', 'exchange'),
                          ('/policies', 'Policies', 'shield')],
         }.get(role, []) %}
 
@@ -327,6 +369,7 @@
                         <button type="button" class="btn btn-ghost btn-sm" data-sidebar-open aria-label="Open menu">
                             {{ icon('menu', 'nav-icon') }}
                         </button>
+                        {{ brand_mark(brand_assets, 'h-7 w-7') }}
                         <span class="font-semibold tracking-tight">Nessence</span>
                     </div>
 
@@ -334,9 +377,7 @@
                            class="fixed inset-y-0 left-0 z-50 w-64 -translate-x-full transform border-r border-line bg-surface transition-transform duration-200
                                   lg:static lg:translate-x-0 lg:transition-none flex flex-col">
                         <div class="flex items-center gap-2.5 px-5 py-5">
-                            <span class="grid h-8 w-8 place-items-center rounded-lg bg-brand text-white">
-                                {{ icon('wallet', 'nav-icon') }}
-                            </span>
+                            {{ brand_mark(brand_assets) }}
                             <span class="font-semibold tracking-tight">Nessence</span>
                             <button type="button" class="btn btn-ghost btn-sm ml-auto lg:hidden"
                                     data-sidebar-close aria-label="Close menu">{{ icon('close', 'nav-icon') }}</button>

@@ -39,6 +39,18 @@ class ExpenseIn(BaseModel):
 
 class DecisionIn(BaseModel):
     approve: bool
+    # Optional here, required by the service when approve is False -- "why" is a rule about
+    # decisions, not about request bodies
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class FundingIn(BaseModel):
+    amount_cents: int = Field(gt=0, le=100_000_000)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class FundingDecisionIn(DecisionIn):
+    pass
 
 
 class SwitchIn(BaseModel):

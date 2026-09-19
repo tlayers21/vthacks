@@ -4,8 +4,13 @@
 -- `python db/seed.py` build the same org through the live Nessie API instead.
 --
 -- The nessie_id values here are deterministic 24-char hex strings shaped like real
--- Nessie ObjectIds, derived from sha1(name)[:24]. They are stable across machines, so
--- tests can hardcode them and every teammate's database is byte-identical.
+-- Nessie ObjectIds: sha1(name)[:24] for a customer, sha1('account:' + owner name)[:24]
+-- for an account. They are stable across machines, so every teammate's database is
+-- byte-identical and the ids can be regenerated from the names alone.
+--
+-- The cast is deliberately small -- one finance person, three managers, one employee each --
+-- because the whole point of this org is that someone can hold it in their head while the
+-- roles are switched in front of them.
 --
 -- The corporation and each department are their own customers, holding the accounts
 -- money moves out of, rather than accounts hung off a finance employee. Money moves
@@ -23,33 +28,26 @@
 
 -- ---------------------------------------------------------------------------
 -- 1. People (department_id attached in step 5)
---    1 Finance, 4 Managers (one per department), 8 Employees (two per department)
+--    1 Finance, 3 Managers (one per department), 3 Employees (one per manager)
 -- ---------------------------------------------------------------------------
 INSERT INTO customers (nessie_id, name, role, department_id) VALUES
-    ('698fec9d4a7cd9beaf936af0', 'Dana Whitfield',   'Finance',  NULL),
-    ('956eed2ecefb9dcafff1c571', 'Marcus Lee',       'Manager',  NULL),
-    ('6aee286af0ba7a046619ddf2', 'Priya Raman',      'Manager',  NULL),
-    ('2c15cdac1210cee43aafc02a', 'Tomas Oliveira',   'Manager',  NULL),
-    ('ab4e1e4d02b9dd22940571cd', 'Helen Osei',       'Manager',  NULL),
-    ('6ca50b885e4037e80db44533', 'Alex Chen',        'Employee', NULL),
-    ('091352ab41e9d1cf44cb8431', 'Ruth Delgado',     'Employee', NULL),
-    ('77eae678aa54d96d23014d38', 'Sam Kowalski',     'Employee', NULL),
-    ('25ee9a33b129edbe3a53de6e', 'Nia Brooks',       'Employee', NULL),
-    ('418d13ad70fa7ea3d5e7ac44', 'Omar Haddad',      'Employee', NULL),
-    ('34b149705a405d7a551ba57b', 'Leah Fitzgerald',  'Employee', NULL),
-    ('88335974e504ae746e4739be', 'Victor Nguyen',    'Employee', NULL),
-    ('ad3d81b993865c367d7a3276', 'Grace Abbott',     'Employee', NULL);
+    ('46dc699d55683c77fb2fdff9', 'Dana Whitfield',   'Finance',  NULL),
+    ('5f421048bd4d8e3e90b9c5e0', 'Marcus Lee',       'Manager',  NULL),
+    ('45e2abedb9e9ca8f43e3871b', 'Priya Raman',      'Manager',  NULL),
+    ('7852de1729944ce87c3eb45c', 'Tomas Oliveira',   'Manager',  NULL),
+    ('78d482edf6fb174320f74ace', 'Alex Chen',        'Employee', NULL),
+    ('b53fcdaaca940b8401ce7e07', 'Sam Kowalski',     'Employee', NULL),
+    ('69b7b41defaa1749ce05d8bf', 'Omar Haddad',      'Employee', NULL);
 
 -- ---------------------------------------------------------------------------
 -- 2. The organization itself: the corporation and each department, as their own
 --    customers. Not people -- these never log in.
 -- ---------------------------------------------------------------------------
 INSERT INTO customers (nessie_id, name, role, department_id) VALUES
-    ('e4be2cad196e442c0bdbadec', 'Acme Corporation',       'Finance', NULL),
-    ('9c9ab00f8ff0d0bd0767295f', 'Engineering Department', 'Finance', NULL),
-    ('450ab5782a5555e531875478', 'Marketing Department',   'Finance', NULL),
-    ('a69bd436eec25cd2151368b7', 'Sales Department',       'Finance', NULL),
-    ('4504875b8392bd29cd11a041', 'Operations Department',  'Finance', NULL);
+    ('22288ec84bcbb222845a5627', 'Nessence Corporation',   'Finance', NULL),
+    ('12e0bcda330db3a05f397dbd', 'Engineering Department', 'Finance', NULL),
+    ('99345ed6ec37b43539f62a95', 'Marketing Department',   'Finance', NULL),
+    ('696a6805e67902eb87dc6966', 'Sales Department',       'Finance', NULL);
 
 -- ---------------------------------------------------------------------------
 -- 3. Accounts -- exactly one per customer.
@@ -57,37 +55,32 @@ INSERT INTO customers (nessie_id, name, role, department_id) VALUES
 
 -- Personal accounts
 INSERT INTO accounts (nessie_id, customer_id) VALUES
-    ('4027109f5fb04b82c41e57dd', '698fec9d4a7cd9beaf936af0'),  -- Dana Whitfield
-    ('a03f7850dcbef86101926901', '956eed2ecefb9dcafff1c571'),  -- Marcus Lee
-    ('5c11cf855c160a73d5e052ba', '6aee286af0ba7a046619ddf2'),  -- Priya Raman
-    ('3686a745ac84e7133f560365', '2c15cdac1210cee43aafc02a'),  -- Tomas Oliveira
-    ('a0d42a323d5b0bbca5a73221', 'ab4e1e4d02b9dd22940571cd'),  -- Helen Osei
-    ('038090567374c396c69c0193', '6ca50b885e4037e80db44533'),  -- Alex Chen
-    ('526c6f4cff32d1c049b4aaac', '091352ab41e9d1cf44cb8431'),  -- Ruth Delgado
-    ('e68adf57ca189113f6ff4a1b', '77eae678aa54d96d23014d38'),  -- Sam Kowalski
-    ('ba3dae59eaea6e448b19a8bc', '25ee9a33b129edbe3a53de6e'),  -- Nia Brooks
-    ('1bc579861a7a3bbbb21c2bfd', '418d13ad70fa7ea3d5e7ac44'),  -- Omar Haddad
-    ('79831998370561564d88eb71', '34b149705a405d7a551ba57b'),  -- Leah Fitzgerald
-    ('dd9a27972975211627f47d69', '88335974e504ae746e4739be'),  -- Victor Nguyen
-    ('24610ab584948472fff60760', 'ad3d81b993865c367d7a3276');  -- Grace Abbott
+    ('e37b75ce4f86d8f21f1f67ae', '46dc699d55683c77fb2fdff9'),  -- Dana Whitfield
+    ('a326388b37fa1ffde5b451be', '5f421048bd4d8e3e90b9c5e0'),  -- Marcus Lee
+    ('503b369cdaf6997c29ef1f85', '45e2abedb9e9ca8f43e3871b'),  -- Priya Raman
+    ('b1902b7859e2357efa1ca098', '7852de1729944ce87c3eb45c'),  -- Tomas Oliveira
+    ('3bc3c624c896b7bfa83308cc', '78d482edf6fb174320f74ace'),  -- Alex Chen
+    ('5f217905496d403ed2847e16', 'b53fcdaaca940b8401ce7e07'),  -- Sam Kowalski
+    ('c5d78435f6b94c7ee8dce4b5', '69b7b41defaa1749ce05d8bf');  -- Omar Haddad
 
 -- Corporate and department accounts
 INSERT INTO accounts (nessie_id, customer_id) VALUES
-    ('f85d0dbca4483d8f8b6f7c55', 'e4be2cad196e442c0bdbadec'),  -- Acme Corporation
-    ('c1c87dca14ac5d687df3579e', '9c9ab00f8ff0d0bd0767295f'),  -- Engineering Department
-    ('0cda0468250c8ede7a03fa51', '450ab5782a5555e531875478'),  -- Marketing Department
-    ('236aeb47ed0cfafb89448d04', 'a69bd436eec25cd2151368b7'),  -- Sales Department
-    ('6b1dd319e41036d920bf747e', '4504875b8392bd29cd11a041');  -- Operations Department
+    ('5f5729d5d8ba611d3de452ba', '22288ec84bcbb222845a5627'),  -- Nessence Corporation
+    ('4b8c7b36165b25ee05b00115', '12e0bcda330db3a05f397dbd'),  -- Engineering Department
+    ('777bb6be4c3aa0dfaa13cc85', '99345ed6ec37b43539f62a95'),  -- Marketing Department
+    ('67ed89ac0858330ac417f07d', '696a6805e67902eb87dc6966');  -- Sales Department
 
 -- ---------------------------------------------------------------------------
 -- 4. Departments. Explicit department_id keeps the ids stable for tests and for the
 --    UPDATE pass below. Budgets are monthly, in cents.
+--
+--    Ids 1 and 2 are load-bearing: policy/rules.py keys its only two overrides on
+--    Engineering-software and Marketing-marketing.
 -- ---------------------------------------------------------------------------
 INSERT INTO departments (department_id, name, monthly_budget_cents, account_id) VALUES
-    (1, 'Engineering', 12000000, 'c1c87dca14ac5d687df3579e'),  -- $120,000
-    (2, 'Marketing',    4500000, '0cda0468250c8ede7a03fa51'),  --  $45,000
-    (3, 'Sales',        8000000, '236aeb47ed0cfafb89448d04'),  --  $80,000
-    (4, 'Operations',   3500000, '6b1dd319e41036d920bf747e');  --  $35,000
+    (1, 'Engineering', 12000000, '4b8c7b36165b25ee05b00115'),  -- $120,000
+    (2, 'Marketing',    4500000, '777bb6be4c3aa0dfaa13cc85'),  --  $45,000
+    (3, 'Sales',        8000000, '67ed89ac0858330ac417f07d');  --  $80,000
 
 -- ---------------------------------------------------------------------------
 -- 5. Attach people to departments. Dana stays unassigned -- finance sees every
@@ -95,36 +88,39 @@ INSERT INTO departments (department_id, name, monthly_budget_cents, account_id) 
 --    department customers stay unassigned too: a department does not belong to itself.
 -- ---------------------------------------------------------------------------
 UPDATE customers SET department_id = 1 WHERE nessie_id IN (
-    '956eed2ecefb9dcafff1c571',  -- Marcus Lee      (Manager)
-    '6ca50b885e4037e80db44533',  -- Alex Chen       (Employee)
-    '091352ab41e9d1cf44cb8431'   -- Ruth Delgado    (Employee)
+    '5f421048bd4d8e3e90b9c5e0',  -- Marcus Lee      (Manager)
+    '78d482edf6fb174320f74ace'   -- Alex Chen       (Employee)
 );
 UPDATE customers SET department_id = 2 WHERE nessie_id IN (
-    '6aee286af0ba7a046619ddf2',  -- Priya Raman     (Manager)
-    '77eae678aa54d96d23014d38',  -- Sam Kowalski    (Employee)
-    '25ee9a33b129edbe3a53de6e'   -- Nia Brooks      (Employee)
+    '45e2abedb9e9ca8f43e3871b',  -- Priya Raman     (Manager)
+    'b53fcdaaca940b8401ce7e07'   -- Sam Kowalski    (Employee)
 );
 UPDATE customers SET department_id = 3 WHERE nessie_id IN (
-    '2c15cdac1210cee43aafc02a',  -- Tomas Oliveira  (Manager)
-    '418d13ad70fa7ea3d5e7ac44',  -- Omar Haddad     (Employee)
-    '34b149705a405d7a551ba57b'   -- Leah Fitzgerald (Employee)
-);
-UPDATE customers SET department_id = 4 WHERE nessie_id IN (
-    'ab4e1e4d02b9dd22940571cd',  -- Helen Osei      (Manager)
-    '88335974e504ae746e4739be',  -- Victor Nguyen   (Employee)
-    'ad3d81b993865c367d7a3276'   -- Grace Abbott    (Employee)
+    '7852de1729944ce87c3eb45c',  -- Tomas Oliveira  (Manager)
+    '69b7b41defaa1749ce05d8bf'   -- Omar Haddad     (Employee)
 );
 
 -- ---------------------------------------------------------------------------
--- 6. Budget requests -- all three statuses represented so the finance decision queue,
---    the filters, and the history views all have rows to show. Marketing's pending
---    request is the planted demo scenario (spec section 11).
+-- 6. Funding requests. Nothing is seeded Approved on purpose: an approved request has
+--    already raised its department's budget and moved corporate money, and replaying that
+--    at startup is exactly the double-count services/startup.py works to avoid. Seeding
+--    only Pending and Rejected keeps the arithmetic honest without a special case.
+--
+--    Marketing's pending request is the planted demo -- it is what unblocks the manager
+--    whose department is over budget.
 -- ---------------------------------------------------------------------------
-INSERT INTO budget_requests (request_id, customer_id, amount_cents, status) VALUES
-    (1, '6aee286af0ba7a046619ddf2', 1800000, 'Pending'),   -- Marketing,   $18,000
-    (2, '956eed2ecefb9dcafff1c571',  750000, 'Pending'),   -- Engineering,  $7,500
-    (3, '2c15cdac1210cee43aafc02a', 1200000, 'Approved'),  -- Sales,       $12,000
-    (4, 'ab4e1e4d02b9dd22940571cd',  500000, 'Rejected');  -- Operations,   $5,000
+INSERT INTO budget_requests (request_id, customer_id, department_id, amount_cents, reason,
+                             status, decided_by, decided_at, decision_note) VALUES
+    (1, '45e2abedb9e9ca8f43e3871b', 2, 2000000,
+        'Q3 campaigns ran long and the recruiting push is still unpaid.',
+        'Pending', NULL, NULL, NULL),
+    (2, '5f421048bd4d8e3e90b9c5e0', 1,  750000,
+        'Two more cloud environments for the launch.',
+        'Pending', NULL, NULL, NULL),
+    (3, '7852de1729944ce87c3eb45c', 3, 1200000,
+        'Extra travel for the west coast accounts.',
+        'Rejected', '46dc699d55683c77fb2fdff9', CURRENT_TIMESTAMP,
+        'Sales is at 1% of budget this month -- come back when it is actually tight.');
 
 -- ---------------------------------------------------------------------------
 -- 7. Expenses -- one per policy outcome, so every branch of the engine has a row to show.
@@ -135,30 +131,38 @@ INSERT INTO budget_requests (request_id, customer_id, amount_cents, status) VALU
 --
 -- Every row's amount must stay consistent with the rule that would have produced its
 -- policy_decision (see policy/rules.py). tests/test_seed_consistency.py enforces that.
+--
+-- Note row 3: the engine blocked it, but nothing is refused by the machine any more, so it
+-- sits in the manager's queue wearing its block. Only row 8 is 'rejected', and a human did it.
 -- ---------------------------------------------------------------------------
 INSERT INTO expenses (expense_id, customer_id, department_id, amount_cents, category,
-                      merchant, description, status, policy_decision) VALUES
+                      merchant, description, status, policy_decision,
+                      decided_by, decided_at, decision_note) VALUES
     -- Under Engineering's $1,000 software auto-approve limit: paid with no human involved
-    (1, '6ca50b885e4037e80db44533', 1,    8900, 'software', 'Figma',
-        'Design seat renewal', 'paid', 'auto_approved'),
-    -- The planted team dinner (spec 11): over the $100 client-meals auto-approve limit,
-    -- under the $500 cap
-    (2, '418d13ad70fa7ea3d5e7ac44', 3,   18000, 'client meals', 'Olive Garden',
-        'Team dinner after the Q3 close', 'needs_approval', 'needs_approval'),
-    -- Over the $5,000 equipment cap, so the engine refused it outright
-    (3, 'ad3d81b993865c367d7a3276', 4,  620000, 'equipment', 'Apple',
-        'Workstation refresh', 'rejected', 'blocked'),
-    -- Rows 4-6 put Marketing at $50,400 against a $45,000 budget: 112% (spec 11).
+    (1, '78d482edf6fb174320f74ace', 1,    8900, 'software', 'Figma',
+        'Design seat renewal', 'paid', 'auto_approved', NULL, NULL, NULL),
+    -- The planted team dinner: over the $100 client-meals auto-approve limit, under the $500 cap
+    (2, '69b7b41defaa1749ce05d8bf', 3,   18000, 'client meals', 'Olive Garden',
+        'Team dinner after the Q3 close', 'needs_approval', 'needs_approval', NULL, NULL, NULL),
+    -- Over the $5,000 equipment cap: the engine says blocked, the manager still decides
+    (3, '78d482edf6fb174320f74ace', 1,  620000, 'equipment', 'Apple',
+        'Workstation refresh', 'needs_approval', 'blocked', NULL, NULL, NULL),
+    -- Rows 4-6 put Marketing at $50,400 against a $45,000 budget: 112%.
     -- Each sits under Marketing's $25,000 cap, so only the budget rule escalates the next one.
-    (4, '77eae678aa54d96d23014d38', 2, 1800000, 'marketing', 'Meta Ads',
-        'Q3 retargeting campaign', 'paid', 'needs_approval'),
-    (5, '25ee9a33b129edbe3a53de6e', 2, 1640000, 'marketing', 'Google Ads',
-        'Search campaign, product launch', 'approved', 'needs_approval'),
-    (6, '77eae678aa54d96d23014d38', 2, 1600000, 'marketing', 'LinkedIn Ads',
-        'Recruiting campaign', 'needs_approval', 'needs_approval'),
+    (4, 'b53fcdaaca940b8401ce7e07', 2, 1800000, 'marketing', 'Meta Ads',
+        'Q3 retargeting campaign', 'paid', 'needs_approval', NULL, NULL, NULL),
+    (5, 'b53fcdaaca940b8401ce7e07', 2, 1640000, 'marketing', 'Google Ads',
+        'Search campaign, product launch', 'approved', 'needs_approval', NULL, NULL, NULL),
+    (6, 'b53fcdaaca940b8401ce7e07', 2, 1600000, 'marketing', 'LinkedIn Ads',
+        'Recruiting campaign', 'needs_approval', 'needs_approval', NULL, NULL, NULL),
     -- Auto-approved but the transfer failed, so retry-payout has something to act on
-    (7, '34b149705a405d7a551ba57b', 3,   42000, 'travel', 'Delta',
-        'Client site visit, ATL-SFO', 'payout_failed', 'auto_approved');
+    (7, '69b7b41defaa1749ce05d8bf', 3,   42000, 'travel', 'Delta',
+        'Client site visit, ATL-SFO', 'payout_failed', 'auto_approved', NULL, NULL, NULL),
+    -- The one rejection in the seed, and a human made it -- with a reason the submitter can read
+    (8, '69b7b41defaa1749ce05d8bf', 3,    9500, 'food', 'Sweetgreen',
+        'Lunch while working the weekend', 'rejected', 'needs_approval',
+        '7852de1729944ce87c3eb45c', CURRENT_TIMESTAMP,
+        'Solo meals are not reimbursable -- put the weekend hours on your timesheet instead.');
 
 INSERT INTO expense_violations (violation_id, expense_id, rule, severity, message) VALUES
     (1, 2, 'approval_threshold', 'warn',
@@ -174,4 +178,6 @@ INSERT INTO expense_violations (violation_id, expense_id, rule, severity, messag
     (6, 6, 'department_budget', 'warn',
         '$16,000.00 exceeds the $10,600.00 left of this month''s $45,000.00 budget'),
     (7, 6, 'approval_threshold', 'warn',
-        '$16,000.00 is over the $2,500.00 auto-approve limit for marketing');
+        '$16,000.00 is over the $2,500.00 auto-approve limit for marketing'),
+    (8, 8, 'approval_threshold', 'warn',
+        '$95.00 is over the $75.00 auto-approve limit for food');

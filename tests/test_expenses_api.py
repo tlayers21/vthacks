@@ -58,31 +58,31 @@ def test_auto_approve_creates_exactly_one_transfer(client, sign_in, db, funded_n
 # -- blocked ----------------------------------------------------------------
 
 
-def test_over_cap_is_blocked_persisted_and_moves_no_money(
+def test_over_cap_goes_to_the_manager_rather_than_being_refused(
     client, sign_in, db, funded_nessie
 ):
-    grace = sign_in("grace")  # Operations
+    """Nothing is refused by the machine: the block becomes the loudest flag in the queue."""
+    alex = sign_in("alex")
     payee = db.execute(
-        "SELECT nessie_id FROM accounts WHERE customer_id = ?", (grace["nessie_id"],)
+        "SELECT nessie_id FROM accounts WHERE customer_id = ?", (alex["nessie_id"],)
     ).fetchone()["nessie_id"]
 
     response = post_expense(client, amount_cents=900_000, category="equipment")
 
-    assert (
-        response.status_code == 201
-    )  # the row exists; the caller needs the violations
+    assert response.status_code == 201
     body = response.get_json()
-    assert body["decision"] == "blocked"
-    assert body["status"] == "rejected"
+    assert body["decision"] == "blocked"  # the engine's verdict is still on the record
+    assert body["status"] == "needs_approval"
     assert "per_expense_cap" in {v["rule"] for v in body["violations"]}
 
     row = expense_db.get_expense(db, body["expense_id"])
+    assert row["policy_decision"] == "blocked"
     assert row["nessie_transfer_id"] is None
     assert funded_nessie.list_transfers(payee) == []
 
 
 def test_blocked_expense_persists_its_violations(client, sign_in, db):
-    sign_in("grace")
+    sign_in("alex")
     expense_id = post_expense(
         client, amount_cents=900_000, category="equipment"
     ).get_json()["expense_id"]
@@ -182,10 +182,17 @@ def test_second_submission_sees_the_first(client, sign_in, db):
 
 
 def test_rejected_expenses_do_not_count_as_committed(client, sign_in, db):
-    grace = sign_in("grace")
-    before = expense_db.department_budget(db, grace["department_id"]).committed_cents
-    post_expense(client, amount_cents=900_000, category="equipment")
-    after = expense_db.department_budget(db, grace["department_id"]).committed_cents
+    alex = sign_in("alex")
+    before = expense_db.department_budget(db, alex["department_id"]).committed_cents
+    expense_id = post_expense(client, amount_cents=200_000).get_json()["expense_id"]
+
+    sign_in("marcus")
+    client.post(
+        f"/api/expenses/{expense_id}/decision",
+        json={"approve": False, "note": "no"},
+    )
+
+    after = expense_db.department_budget(db, alex["department_id"]).committed_cents
     assert after == before
 
 
@@ -225,7 +232,7 @@ def test_unknown_category_is_rejected(client, sign_in):
 
 def test_department_pseudo_customer_cannot_submit(client, db):
     corporate = db.execute(
-        "SELECT nessie_id FROM customers WHERE name = 'Acme Corporation'"
+        "SELECT nessie_id FROM customers WHERE name = 'Nessence Corporation'"
     ).fetchone()
     with client.session_transaction() as session:
         session["user_id"] = corporate["nessie_id"]
@@ -264,10 +271,12 @@ def test_manager_rejection_moves_no_money(client, sign_in, db, funded_nessie):
 
     sign_in("marcus")
     response = client.post(
-        f"/api/expenses/{expense_id}/decision", json={"approve": False}
+        f"/api/expenses/{expense_id}/decision",
+        json={"approve": False, "note": "Buy it through procurement instead."},
     )
 
     assert response.get_json()["status"] == "rejected"
+    assert expense_db.get_expense(db, expense_id)["decision_note"]
     assert funded_nessie.list_transfers(payee) == []
 
 
@@ -282,16 +291,84 @@ def test_manager_cannot_decide_another_department(client, sign_in):
     assert response.status_code == 403
 
 
-def test_employee_cannot_decide(client, sign_in):
+def test_employee_cannot_decide_even_their_own(client, sign_in):
     sign_in("alex")
     expense_id = post_expense(client, amount_cents=200_000).get_json()["expense_id"]
 
-    sign_in("ruth")  # Engineering, but an employee
     assert (
         client.post(
             f"/api/expenses/{expense_id}/decision", json={"approve": True}
         ).status_code
         == 403
+    )
+
+
+def test_finance_cannot_decide_an_expense(client, sign_in):
+    """Finance funds departments and watches the money; managers judge receipts."""
+    sign_in("alex")
+    expense_id = post_expense(client, amount_cents=200_000).get_json()["expense_id"]
+
+    sign_in("dana")
+    assert (
+        client.post(
+            f"/api/expenses/{expense_id}/decision", json={"approve": True}
+        ).status_code
+        == 403
+    )
+
+
+def test_manager_cannot_submit_an_expense(client, sign_in):
+    sign_in("marcus")
+    assert post_expense(client).status_code == 403
+
+
+def test_finance_cannot_submit_an_expense(client, sign_in):
+    sign_in("dana")
+    assert post_expense(client).status_code == 403
+
+
+def test_a_rejection_without_a_reason_is_refused(client, sign_in, db):
+    sign_in("alex")
+    expense_id = post_expense(client, amount_cents=200_000).get_json()["expense_id"]
+
+    sign_in("marcus")
+    response = client.post(
+        f"/api/expenses/{expense_id}/decision", json={"approve": False, "note": "  "}
+    )
+
+    assert response.status_code == 400
+    assert expense_db.get_expense(db, expense_id)["status"] == "needs_approval"
+
+
+def test_an_over_budget_department_cannot_approve_until_finance_funds_it(
+    client, sign_in, db
+):
+    """Marketing is seeded at 112%, so its manager is stuck until a funding request lands."""
+    sign_in("priya")
+    pending = expense_db.list_expenses(
+        db, department_id=2, statuses=("needs_approval",)
+    )
+    expense_id = pending[0]["expense_id"]
+
+    blocked = client.post(
+        f"/api/expenses/{expense_id}/decision", json={"approve": True}
+    )
+    assert blocked.status_code == 409
+    assert blocked.get_json()["shortfall_cents"] > 0
+
+    # Finance funds the department, and the same approval now goes through
+    request_id = client.post(
+        "/api/funding", json={"amount_cents": 2_000_000, "reason": "over budget"}
+    ).get_json()["request_id"]
+    sign_in("dana")
+    client.post(f"/api/funding/{request_id}/decision", json={"approve": True})
+
+    sign_in("priya")
+    assert (
+        client.post(
+            f"/api/expenses/{expense_id}/decision", json={"approve": True}
+        ).status_code
+        == 200
     )
 
 
@@ -329,7 +406,7 @@ def test_employee_cannot_read_another_persons_expense(client, sign_in, db):
 
 
 def test_preview_matches_submission_without_writing(client, sign_in, db):
-    sign_in("grace")
+    sign_in("alex")
     before = db.execute("SELECT COUNT(*) AS n FROM expenses").fetchone()["n"]
     payload = {"amount_cents": 900_000, "category": "equipment"}
 
@@ -358,8 +435,8 @@ def test_category_spend_summary_excludes_rejected_and_ranks_by_spend(db):
     assert by_category["marketing"]["spent_cents"] == 5_040_000
     assert by_category["marketing"]["expense_count"] == 3
 
-    # Expense 3 (Apple, $6,200) was rejected, so equipment never appears
-    assert "equipment" not in by_category
+    # Expense 8 (Sweetgreen, $95) is the one a manager rejected, so food never appears
+    assert "food" not in by_category
 
     committed = sum(row["spent_cents"] for row in rows)
     departments = expense_db.department_spend_summary(db)

@@ -21,31 +21,17 @@ def switch():
     except ValidationError as exc:
         return jsonify(error="invalid user", detail=exc.errors(include_url=False)), 400
 
-    row = (
-        get_conn()
-        .execute(
-            "SELECT nessie_id FROM customers WHERE nessie_id = ? AND department_id IS NOT NULL",
-            (payload.user_id,),
-        )
-        .fetchone()
-    )
-    if row is None:
-        # Dana is finance and belongs to no department, so she is allowed explicitly
-        row = (
-            get_conn()
-            .execute(
-                "SELECT nessie_id FROM customers WHERE nessie_id = ? AND role = 'Finance'",
-                (payload.user_id,),
-            )
-            .fetchone()
-        )
-    if row is None:
+    # Exactly the people the switcher offers, and nobody else. Matching on role = 'Finance'
+    # instead would also sign you in as the corporation, which owns the account everything
+    # is funded from
+    offered = {u["nessie_id"] for u in switchable_users(get_conn())}
+    if payload.user_id not in offered:
         return jsonify(error="no such user"), 404
 
-    session["user_id"] = row["nessie_id"]
+    session["user_id"] = payload.user_id
     if request.form:
         return redirect(request.form.get("next") or "/")
-    return jsonify(user_id=row["nessie_id"])
+    return jsonify(user_id=payload.user_id)
 
 
 @bp.get("/me")

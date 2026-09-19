@@ -43,12 +43,35 @@
                 {% endif %}
             </p>
         </div>
+        {#- Informational only. Managers decide expenses; finance decides funding -#}
         <div class="stat {% if pending %}tone-warn{% endif %}">
-            <p class="stat-label">Awaiting approval</p>
+            <p class="stat-label">With managers</p>
             <p class="stat-value">{{ pending | length }}</p>
-            <p class="stat-sub">{{ money(org.pending) }} held up</p>
+            <p class="stat-sub">{{ money(org.pending) }} awaiting their call</p>
         </div>
     </div>
+
+    {% if pending_funding %}
+        {% set asked = namespace(value=0) %}
+        {% for request in pending_funding %}{% set asked.value = asked.value + request.amount_cents %}{% endfor %}
+        <div class="card mt-6 tone-warn border-warn">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <p class="flex items-center gap-2 font-semibold">
+                        {{ icon('coins', 'nav-icon') }}
+                        {{ pending_funding | length }} funding request{{ '' if pending_funding | length == 1 else 's' }}
+                        waiting on you
+                    </p>
+                    <p class="mt-1 text-sm text-muted">
+                        {{ money(asked.value) }} across
+                        {{ pending_funding | map(attribute='department_name') | unique | join(', ') }}.
+                        Until one is approved those departments cannot approve any more spend.
+                    </p>
+                </div>
+                <a href="/funding" class="btn btn-primary">Review requests</a>
+            </div>
+        </div>
+    {% endif %}
 
     <h2 class="mt-9 mb-3 text-lg font-semibold tracking-tight">Department budgets</h2>
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

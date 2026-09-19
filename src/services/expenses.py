@@ -9,7 +9,12 @@ import sqlite3
 from db import expenses as expense_db
 from db.connect import transaction
 from policy import DECISION_TO_STATUS, ExpenseDraft, PolicyResult, evaluate_expense
-from services.permissions import Forbidden, can_decide, can_submit
+from services.permissions import (
+    Forbidden,
+    InsufficientBudget,
+    can_decide,
+    can_submit,
+)
 
 log = logging.getLogger(__name__)
 
@@ -111,6 +116,7 @@ def decide_expense(
     actor: sqlite3.Row,
     expense_id: int,
     approve: bool,
+    note: str | None = None,
     nessie=None,
 ) -> dict:
     """A manager's call on an expense the engine routed to them."""
@@ -122,10 +128,29 @@ def decide_expense(
     if expense["status"] != "needs_approval":
         raise Forbidden(f"expense is {expense['status']}, not awaiting a decision")
 
+    note = (note or "").strip() or None
+    if not approve and note is None:
+        raise ValueError("a rejection needs a reason")
+    if approve:
+        _require_funds(conn, expense["department_id"])
+
     status = "approved" if approve else "rejected"
     with transaction(conn):
-        expense_db.record_decision(conn, expense_id, status, actor["nessie_id"])
+        expense_db.record_decision(conn, expense_id, status, actor["nessie_id"], note)
 
     if approve:
         status = pay_expense(conn, expense_id, nessie)
     return {"expense_id": expense_id, "status": status}
+
+
+def _require_funds(conn: sqlite3.Connection, department_id: int) -> None:
+    """A manager cannot approve past the department's budget -- finance has to top it up first.
+
+    The expense being decided is already inside committed_cents (needs_approval counts as
+    exposure), so the whole test is whether the department is still in the black. That is the
+    same number the budget bar on /finance draws, which is the point: what the manager is told
+    and what finance is looking at can never disagree.
+    """
+    budget = expense_db.department_budget(conn, department_id)
+    if budget.remaining_cents < 0:
+        raise InsufficientBudget(-budget.remaining_cents)

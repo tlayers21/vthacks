@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import money, money_short, badge, empty_state %}
+{% block title %}Transactions{% endblock %}
+{% block page_title %}Transactions{% endblock %}
+{% block page_subtitle %}
+    <p class="page-sub">
+        Every transfer the company has settled. Money only ever moves two ways: the corporation
+        funding a department, or a department reimbursing a person.
+    </p>
+{% endblock %}
+
+{% block content %}
+    {% set totals = namespace(allocation=0, reimbursement=0) %}
+    {% for row in ledger %}
+        {% if row.kind == 'allocation' %}
+            {% set totals.allocation = totals.allocation + row.amount_cents %}
+        {% else %}
+            {% set totals.reimbursement = totals.reimbursement + row.amount_cents %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="mb-6 grid gap-3 sm:grid-cols-3">
+        <div class="stat">
+            <p class="stat-label">Transfers</p>
+            <p class="stat-value">{{ ledger | length }}</p>
+        </div>
+        <div class="stat">
+            <p class="stat-label">Funded to departments</p>
+            <p class="stat-value">{{ money_short(totals.allocation) }}</p>
+            <p class="stat-sub">{{ money(totals.allocation) }}</p>
+        </div>
+        <div class="stat">
+            <p class="stat-label">Reimbursed to people</p>
+            <p class="stat-value">{{ money_short(totals.reimbursement) }}</p>
+            <p class="stat-sub">{{ money(totals.reimbursement) }}</p>
+        </div>
+    </div>
+
+    {% if not ledger %}
+        {{ empty_state('No money has moved yet.', 'Approved expenses and funding requests show up here.') }}
+    {% else %}
+        <div class="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+            <div class="overflow-x-auto">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>Kind</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th class="num">Amount</th>
+                            <th>Date</th>
+                            <th>Nessie transfer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in ledger %}
+                            <tr>
+                                <td>{{ badge(row.kind) }}</td>
+                                <td class="font-medium">{{ row.payer_name }}</td>
+                                <td class="font-medium">{{ row.payee_name }}</td>
+                                <td class="num font-medium">{{ money(row.amount_cents) }}</td>
+                                <td class="whitespace-nowrap text-muted">{{ (row.moved_at or '')[:10] or '—' }}</td>
+                                <td>
+                                    {#- The id is the point: Nessie is the audit trail, so a row
+                                        with no id behind it would be a claim with no evidence -#}
+                                    <span class="block font-mono text-xs">{{ row.nessie_transfer_id }}</span>
+                                    <span class="mt-0.5 block text-xs text-muted">{{ row.reference }}</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
