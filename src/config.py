@@ -9,7 +9,9 @@ and response schemas at the route boundary -- it just isn't needed to read five 
 import os
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).parent
+SRC_DIR = Path(__file__).parent
+# .env and the database live at the repo root, one level above src/
+REPO_ROOT = SRC_DIR.parent
 ENV_FILE = REPO_ROOT / ".env"
 
 
