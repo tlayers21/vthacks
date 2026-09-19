@@ -62,6 +62,7 @@ def preview():
         category=payload.category,
         merchant=payload.merchant,
         description=payload.description,
+        has_receipt=payload.has_receipt,
     )
     result = preview_expense(get_conn(), draft)
     return jsonify(

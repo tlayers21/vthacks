@@ -141,6 +141,26 @@
 {% endmacro %}
 
 
+{#- Receipt thumbnail. Images render inline; a PDF gets a link, since a PDF thumbnail
+    needs a renderer this project does not have. <img> never executes script, which is what
+    makes it safe to show a file someone else uploaded. -#}
+{% macro receipt_preview(expense) %}
+    {% if expense.receipt_path %}
+        <a class="receipt" href="/receipts/{{ expense.expense_id }}" target="_blank"
+           rel="noopener noreferrer" title="{{ expense.receipt_filename }}">
+            {% if expense.receipt_mime == 'application/pdf' %}
+                <span class="receipt-file">{{ icon('receipt') }}<span>PDF receipt</span></span>
+            {% else %}
+                <img src="/receipts/{{ expense.expense_id }}" alt="Receipt for expense {{ expense.expense_id }}" loading="lazy">
+            {% endif %}
+            <span class="receipt-open">Open full size</span>
+        </a>
+    {% else %}
+        <p class="receipt-missing">{{ icon('receipt', 'violation-icon') }}<span>No receipt attached</span></p>
+    {% endif %}
+{% endmacro %}
+
+
 {% macro nav_link(href, label, name, active) %}
     <a href="{{ href }}" class="nav-link{% if active %} is-active{% endif %}"
        {% if active %}aria-current="page"{% endif %}>

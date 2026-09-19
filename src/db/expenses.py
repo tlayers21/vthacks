@@ -46,12 +46,14 @@ def insert_expense(
     draft: ExpenseDraft,
     result: PolicyResult,
     status: str,
+    receipt=None,
 ) -> int:
     cursor = conn.execute(
         "INSERT INTO expenses"
         " (customer_id, department_id, amount_cents, category, merchant, description,"
-        "  status, policy_decision)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "  status, policy_decision,"
+        "  receipt_path, receipt_filename, receipt_mime, receipt_hash)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             draft.customer_id,
             draft.department_id,
@@ -61,6 +63,10 @@ def insert_expense(
             draft.description,
             status,
             result.decision,
+            receipt.path if receipt else None,
+            receipt.filename if receipt else None,
+            receipt.mime if receipt else None,
+            receipt.hash if receipt else None,
         ),
     )
     expense_id = cursor.lastrowid

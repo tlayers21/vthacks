@@ -14,7 +14,12 @@ from api.deps import actor_with_role, current_user, get_conn, switchable_users
 from db import budget_requests as request_db
 from db import expenses as expense_db
 from db.ledger import transaction_ledger
-from policy import CATEGORIES, overridden_categories, resolved_rules
+from policy import (
+    CATEGORIES,
+    RECEIPT_REQUIRED_OVER_CENTS,
+    overridden_categories,
+    resolved_rules,
+)
 from services.permissions import can_submit, default_scope, visible_expense_filter
 
 bp = Blueprint("ui", __name__)
@@ -66,7 +71,13 @@ def new_expense():
     if actor is None or not can_submit(actor):
         return redirect("/")
     budget = expense_db.department_budget(get_conn(), actor["department_id"])
-    return render_template("new_expense.html", budget=budget)
+    # Passed through so the form can gate its own submit button without waiting for the
+    # debounced preview, and without hardcoding a second copy of the threshold
+    return render_template(
+        "new_expense.html",
+        budget=budget,
+        receipt_threshold_cents=RECEIPT_REQUIRED_OVER_CENTS,
+    )
 
 
 @bp.get("/expenses/mine")

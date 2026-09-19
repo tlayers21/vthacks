@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="326" viewBox="0 0 360 326">
+  <style>
+    text { font-family: "Courier New", monospace; fill: #1a1a1a; }
+    .h { font-size: 19px; font-weight: bold; letter-spacing: 1px; }
+    .s { font-size: 11px; fill: #666; }
+    .i { font-size: 13px; }
+    .r { text-anchor: end; }
+    .t { font-size: 15px; font-weight: bold; }
+    .f { font-size: 10px; fill: #888; }
+  </style>
+  <rect width="360" height="326" fill="#fffdf8"/>
+  <rect x="8" y="8" width="344" height="310" fill="#fff" stroke="#e2ded4"/>
+  <text x="180" y="48" class="h" text-anchor="middle">FIGMA INC</text>
+  <text x="180" y="66" class="s" text-anchor="middle">760 Market St, San Francisco CA</text>
+  <text x="180" y="82" class="s" text-anchor="middle">Sept 03, 2026  9:00 AM</text>
+  <line x1="24" y1="100" x2="336" y2="100" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="118" class="s">ITEM</text><text x="336" y="118" class="s r">AMOUNT</text>
+  <text x="24" y="132" class="i">Professional seat</text><text x="336" y="132" class="i r">$15.00</text>
+  <text x="24" y="154" class="i">Annual billing x1</text><text x="336" y="154" class="i r">$74.00</text>
+  <line x1="24" y1="180" x2="336" y2="180" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="204" class="i">Subtotal</text><text x="336" y="204" class="i r">$89.00</text>
+  <text x="24" y="226" class="i">Tax</text><text x="336" y="226" class="i r">$0.00</text>
+  <line x1="24" y1="238" x2="336" y2="238" stroke="#333"/>
+  <text x="24" y="262" class="t">TOTAL</text><text x="336" y="262" class="t r">$89.00</text>
+  <text x="180" y="290" class="f" text-anchor="middle">VISA ****4417  APPROVED</text>
+  <text x="180" y="308" class="f" text-anchor="middle">*** SAMPLE RECEIPT - NOT A REAL TRANSACTION ***</text>
+</svg>

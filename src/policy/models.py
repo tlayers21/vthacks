@@ -9,7 +9,9 @@ from typing import Literal
 
 Decision = Literal["auto_approved", "needs_approval", "blocked"]
 Severity = Literal["block", "warn"]
-RuleName = Literal["per_expense_cap", "department_budget", "approval_threshold"]
+RuleName = Literal[
+    "per_expense_cap", "department_budget", "approval_threshold", "missing_receipt"
+]
 
 # Mirrored by the CHECK constraint on expenses.category in db/schema.sql
 CATEGORIES: tuple[str, ...] = (
@@ -42,6 +44,8 @@ class ExpenseDraft:
     category: str
     merchant: str | None = None
     description: str | None = None
+    # Whether a receipt is attached, not the receipt itself -- the engine stays pure
+    has_receipt: bool = False
 
 
 @dataclass(frozen=True, slots=True)

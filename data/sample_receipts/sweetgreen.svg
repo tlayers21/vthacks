@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="436" viewBox="0 0 360 436">
+  <style>
+    text { font-family: "Courier New", monospace; fill: #1a1a1a; }
+    .h { font-size: 19px; font-weight: bold; letter-spacing: 1px; }
+    .s { font-size: 11px; fill: #666; }
+    .i { font-size: 13px; }
+    .r { text-anchor: end; }
+    .t { font-size: 15px; font-weight: bold; }
+    .f { font-size: 10px; fill: #888; }
+  </style>
+  <rect width="360" height="436" fill="#fffdf8"/>
+  <rect x="8" y="8" width="344" height="420" fill="#fff" stroke="#e2ded4"/>
+  <text x="180" y="48" class="h" text-anchor="middle">SWEETGREEN</text>
+  <text x="180" y="66" class="s" text-anchor="middle">845 Peachtree St NE, Atlanta GA</text>
+  <text x="180" y="82" class="s" text-anchor="middle">Sept 13, 2026  1:18 PM</text>
+  <line x1="24" y1="100" x2="336" y2="100" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="118" class="s">ITEM</text><text x="336" y="118" class="s r">AMOUNT</text>
+  <text x="24" y="132" class="i">Harvest Bowl</text><text x="336" y="132" class="i r">$14.95</text>
+  <text x="24" y="154" class="i">Chicken Pesto Parm</text><text x="336" y="154" class="i r">$15.95</text>
+  <text x="24" y="176" class="i">Shroomami</text><text x="336" y="176" class="i r">$13.75</text>
+  <text x="24" y="198" class="i">Guacamole Greens</text><text x="336" y="198" class="i r">$14.45</text>
+  <text x="24" y="220" class="i">Kale Caesar</text><text x="336" y="220" class="i r">$13.25</text>
+  <text x="24" y="242" class="i">Sparkling water x3</text><text x="336" y="242" class="i r">$8.85</text>
+  <text x="24" y="264" class="i">Cookies x2</text><text x="336" y="264" class="i r">$6.50</text>
+  <line x1="24" y1="290" x2="336" y2="290" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="314" class="i">Subtotal</text><text x="336" y="314" class="i r">$87.70</text>
+  <text x="24" y="336" class="i">Tax</text><text x="336" y="336" class="i r">$7.30</text>
+  <line x1="24" y1="348" x2="336" y2="348" stroke="#333"/>
+  <text x="24" y="372" class="t">TOTAL</text><text x="336" y="372" class="t r">$95.00</text>
+  <text x="180" y="400" class="f" text-anchor="middle">VISA ****4417  APPROVED</text>
+  <text x="180" y="418" class="f" text-anchor="middle">*** SAMPLE RECEIPT - NOT A REAL TRANSACTION ***</text>
+</svg>

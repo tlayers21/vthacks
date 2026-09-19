@@ -55,8 +55,8 @@ def can_decide(actor: sqlite3.Row, expense: sqlite3.Row) -> bool:
     return actor["department_id"] == expense["department_id"]
 
 
-def can_view(actor: sqlite3.Row, expense: sqlite3.Row) -> bool:
-    """Finance sees every row without being able to act on one, so this is wider than can_decide."""
+def can_view_expense(actor: sqlite3.Row, expense: sqlite3.Row) -> bool:
+    """Its submitter, anyone who could decide it, or finance. Also gates the receipt file."""
     return (
         actor["role"] == "Finance"
         or actor["nessie_id"] == expense["customer_id"]

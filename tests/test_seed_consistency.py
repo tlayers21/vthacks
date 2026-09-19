@@ -5,7 +5,7 @@ worse than no demo, so these assert the planted rows stay honest."""
 import pytest
 
 from db import expenses as expense_db
-from policy import default_rule_source
+from policy import RECEIPT_REQUIRED_OVER_CENTS, default_rule_source
 
 
 def seeded_expenses(db):
@@ -84,3 +84,33 @@ def test_every_other_department_is_within_budget(db):
         if row["department_id"] == 2:
             continue
         assert row["committed_cents"] <= row["monthly_budget_cents"]
+
+
+def test_rows_over_the_receipt_threshold_carry_a_receipt(db):
+    """Spec 7.2 blocks anything over $25 with no receipt, so a seeded row without one would
+    be claiming a verdict the engine would never have given it."""
+    for expense in seeded_expenses(db):
+        if expense["amount_cents"] > RECEIPT_REQUIRED_OVER_CENTS:
+            assert expense["receipt_path"], (
+                f"expense {expense['expense_id']} is"
+                f" {expense['amount_cents']}c with no receipt"
+            )
+
+
+def test_seeded_receipt_files_exist_on_disk(db):
+    """A receipt_path with no file behind it renders as a broken image in the approval queue."""
+    from services.receipts import install_samples, resolve
+
+    install_samples()
+    for expense in seeded_expenses(db):
+        if expense["receipt_path"]:
+            assert resolve(expense["receipt_path"]).exists(), (
+                f"expense {expense['expense_id']} points at a missing receipt file"
+            )
+
+
+def test_receipt_hash_matches_the_stored_filename(db):
+    """The filename is the hash, which is what makes identical uploads share one file."""
+    for expense in seeded_expenses(db):
+        if expense["receipt_path"]:
+            assert expense["receipt_path"].startswith(expense["receipt_hash"])

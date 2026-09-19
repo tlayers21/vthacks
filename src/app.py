@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 
 from api.deps import close_conn
 from config import settings
@@ -11,18 +11,27 @@ def create_app(conn_factory=None, nessie=None) -> Flask:
     """Build the app. The factory exists so tests can hand in their own database and mock."""
     app = Flask(__name__)
     app.secret_key = settings.secret_key
+    # Rejected by Werkzeug before the route runs, so an oversized upload never reaches disk
+    app.config["MAX_CONTENT_LENGTH"] = settings.max_receipt_bytes
     app.config["CONN_FACTORY"] = conn_factory
     app.config["NESSIE"] = nessie or get_nessie()
     # Tests pass one connection they keep using after the request ends
     app.config["KEEP_CONN"] = conn_factory is not None
 
-    from api.routes import auth, expenses, funding, policies, ui
+    from api.routes import auth, expenses, funding, policies, receipts, ui
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(expenses.bp)
     app.register_blueprint(funding.bp)
     app.register_blueprint(policies.bp)
+    app.register_blueprint(receipts.bp)
     app.register_blueprint(ui.bp)
+
+    @app.errorhandler(413)
+    def too_large(_exc):
+        # Default is an HTML page, which the fetch() callers cannot parse
+        limit_mb = settings.max_receipt_bytes // (1024 * 1024)
+        return jsonify(error=f"receipts must be under {limit_mb}MB"), 413
 
     app.teardown_appcontext(close_conn)
 

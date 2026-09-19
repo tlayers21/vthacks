@@ -42,6 +42,16 @@
                     <textarea id="description" name="description" class="textarea" rows="3"
                               maxlength="1000" placeholder="What was this for?"></textarea>
                 </div>
+
+                <div class="sm:col-span-2">
+                    <label class="label" for="receipt">Receipt</label>
+                    <input type="file" id="receipt" name="receipt" class="input"
+                           accept=".png,.jpg,.jpeg,.webp,.pdf">
+                    <p id="receipt-hint" class="mt-1 text-xs text-muted">
+                        PNG, JPG, WEBP or PDF, up to 10MB.
+                        Receipts are required over {{ money(receipt_threshold_cents) }}.
+                    </p>
+                </div>
             </div>
 
             <div class="mt-5 flex items-center gap-3 border-t border-line pt-4">
@@ -76,13 +86,39 @@
         const previewHead = document.querySelector("#preview .preview-head span");
         const submitButton = document.getElementById("submit-button");
         const budgetAfter = document.getElementById("budget-after");
+        const receiptInput = document.getElementById("receipt");
+        const receiptHint = document.getElementById("receipt-hint");
 
         const BUDGET_CENTS = {{ budget.monthly_budget_cents }};
         const COMMITTED_CENTS = {{ budget.committed_cents }};
+        const RECEIPT_THRESHOLD_CENTS = {{ receipt_threshold_cents }};
 
         const money = (cents) =>
             (cents < 0 ? "-$" : "$") +
             Math.abs(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const RECEIPT_RULE_TEXT = `Receipts are required over ${money(RECEIPT_THRESHOLD_CENTS)}.`;
+        const FILE_HINT = `PNG, JPG, WEBP or PDF, up to 10MB. ${RECEIPT_RULE_TEXT}`;
+
+        function enteredCents() {
+            const dollars = parseFloat(form.amount.value);
+            return dollars > 0 ? Math.round(dollars * 100) : 0;
+        }
+
+        // A missing receipt is a fixable mistake, not a policy call to override, so it is the
+        // one thing the form bars outright. The threshold is already printed under the field,
+        // so acting on it states no verdict the page does not already show.
+        function receiptMissing() {
+            return enteredCents() > RECEIPT_THRESHOLD_CENTS && !receiptInput.files.length;
+        }
+
+        /** Single owner of the button's enabled state. Returns true if submission is barred. */
+        function gateSubmit() {
+            const barred = receiptMissing();
+            submitButton.disabled = barred;
+            submitButton.textContent = barred ? "Add a receipt to submit" : "Submit expense";
+            return barred;
+        }
 
         function payload() {
             const dollars = parseFloat(form.amount.value);
@@ -113,28 +149,52 @@
                     : `${money(left)} left after this expense.`;
         }
 
-        form.addEventListener("input", refresh);
-        form.addEventListener("change", refresh);
+        // Both listeners gate first: an amount typed past the receipt threshold must
+        // disable the button before the echo below redraws.
+        function update() {
+            gateSubmit();
+            refresh();
+        }
+
+        form.addEventListener("input", update);
+        form.addEventListener("change", update);
+
+        receiptInput.addEventListener("change", () => {
+            const file = receiptInput.files[0];
+            receiptHint.textContent = file
+                ? `${file.name} — ${(file.size / 1024).toFixed(0)} KB`
+                : FILE_HINT;
+            update();
+        });
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
             const body = payload();
             if (!body) return;
+            // Enter submits a form even while the button is disabled
+            if (gateSubmit()) return;
             submitButton.disabled = true;
             try {
-                const response = await fetch("/api/expenses", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body),
-                });
-                const result = await response.json();
+                // Multipart rather than JSON so the file and the row arrive together
+                const data = new FormData();
+                data.append("amount_cents", body.amount_cents);
+                data.append("category", body.category);
+                if (body.merchant) data.append("merchant", body.merchant);
+                if (body.description) data.append("description", body.description);
+                if (receiptInput.files[0]) data.append("receipt", receiptInput.files[0]);
+
+                const response = await fetch("/api/expenses", { method: "POST", body: data });
+                const result = await response.json().catch(() => ({ error: "Upload rejected." }));
                 if (!response.ok) {
                     toast(result.error || "Could not submit that expense.", "crit");
                     return;
                 }
                 window.location = "/expenses/mine?submitted=" + result.expense_id;
             } finally {
+                // Through the gate, not a blanket re-enable -- a rejected upload must not
+                // hand back a clickable button
                 submitButton.disabled = false;
+                gateSubmit();
             }
         });
     </script>

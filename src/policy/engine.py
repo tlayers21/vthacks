@@ -16,7 +16,7 @@ from .models import (
     PolicyResult,
     Violation,
 )
-from .rules import RuleSource, default_rule_source
+from .rules import RECEIPT_REQUIRED_OVER_CENTS, RuleSource, default_rule_source
 
 
 def _dollars(cents: int) -> str:
@@ -56,6 +56,18 @@ def evaluate_expense(
                     f"{_dollars(amount)} exceeds the "
                     f"{_dollars(max(budget.remaining_cents, 0))} left of this month's "
                     f"{_dollars(budget.monthly_budget_cents)} budget"
+                ),
+            )
+        )
+
+    if amount > RECEIPT_REQUIRED_OVER_CENTS and not expense.has_receipt:
+        violations.append(
+            Violation(
+                rule="missing_receipt",
+                severity="block",
+                message=(
+                    f"a receipt is required for anything over "
+                    f"{_dollars(RECEIPT_REQUIRED_OVER_CENTS)}"
                 ),
             )
         )

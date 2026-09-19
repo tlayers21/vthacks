@@ -21,12 +21,20 @@ RULES = StaticRuleSource(
 )
 
 
-def draft(amount_cents: int, category: str = "food") -> ExpenseDraft:
+def draft(
+    amount_cents: int, category: str = "food", has_receipt: bool = True
+) -> ExpenseDraft:
+    """Defaults to having a receipt so the other rules can be tested on their own.
+
+    Without that, every amount over $25 would also trip missing_receipt and these tests
+    would all be asserting on the receipt rule by accident.
+    """
     return ExpenseDraft(
         customer_id="c1",
         department_id=1,
         amount_cents=amount_cents,
         category=category,
+        has_receipt=has_receipt,
     )
 
 
@@ -160,3 +168,37 @@ def test_department_specific_rule_is_used():
     assert (
         evaluate_expense(sales, budget(), default_rule_source()).decision == "blocked"
     )
+
+
+# -- receipts (spec 7.2) ---------------------------------------------------
+
+
+def test_over_the_threshold_without_a_receipt_is_blocked():
+    result = evaluate_expense(draft(2_501, has_receipt=False), budget(), RULES)
+    assert result.decision == "blocked"
+    assert "missing_receipt" in rules_fired(result)
+
+
+def test_over_the_threshold_with_a_receipt_is_not_blocked_by_it():
+    result = evaluate_expense(draft(2_501, has_receipt=True), budget(), RULES)
+    assert "missing_receipt" not in rules_fired(result)
+    assert result.decision == "auto_approved"
+
+
+def test_exactly_at_the_threshold_needs_no_receipt():
+    """Strictly greater-than, like every other limit in the engine."""
+    result = evaluate_expense(draft(2_500, has_receipt=False), budget(), RULES)
+    assert "missing_receipt" not in rules_fired(result)
+    assert result.decision == "auto_approved"
+
+
+def test_under_the_threshold_needs_no_receipt():
+    result = evaluate_expense(draft(500, has_receipt=False), budget(), RULES)
+    assert result.decision == "auto_approved"
+    assert result.violations == ()
+
+
+def test_missing_receipt_reports_alongside_the_other_rules():
+    """Rules do not short-circuit, so a big receiptless expense explains itself fully."""
+    result = evaluate_expense(draft(CAP + 1, has_receipt=False), budget(), RULES)
+    assert {"missing_receipt", "per_expense_cap", "approval_threshold"} <= rules_fired(result)

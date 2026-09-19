@@ -18,6 +18,7 @@ from .models import (
 from .rules import (
     ORG_FALLBACK,
     POLICY_RULES,
+    RECEIPT_REQUIRED_OVER_CENTS,
     RuleSource,
     StaticRuleSource,
     default_rule_source,
@@ -30,6 +31,7 @@ __all__ = [
     "DECISION_TO_STATUS",
     "ORG_FALLBACK",
     "POLICY_RULES",
+    "RECEIPT_REQUIRED_OVER_CENTS",
     "Decision",
     "DepartmentBudget",
     "ExpenseDraft",

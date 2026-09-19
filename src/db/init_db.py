@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
+from services.receipts import install_samples  # noqa: E402
 
 # Anchored to the repo root, not the working directory -- otherwise running this from
 # another folder silently creates a second app.db that nothing else reads.
@@ -25,6 +26,8 @@ def init_db(path=DB_PATH):
         conn.commit()
     finally:
         conn.close()
+    # Seeded rows reference these by hash, so a missing file renders as a broken image
+    install_samples()
 
 
 if __name__ == "__main__":

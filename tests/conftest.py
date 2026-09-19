@@ -4,11 +4,27 @@ from pathlib import Path
 import pytest
 
 from app import create_app
+from config import settings
 from db.connect import connect
 from nessie import MockNessie
 from services.startup import hydrate_mock_accounts
 
 SQL_DIR = Path(__file__).resolve().parent.parent / "src" / "db"
+
+
+@pytest.fixture(autouse=True)
+def receipts_dir(tmp_path, monkeypatch):
+    """Send uploads to a temp directory so tests never litter data/receipts/.
+
+    Autouse because an upload test that forgot it would write into the repo, and the
+    sample receipts are copied in so seeded rows still resolve to a real file.
+    """
+    target = tmp_path / "receipts"
+    monkeypatch.setattr(settings, "receipts_dir", target)
+    from services.receipts import install_samples
+
+    install_samples()
+    return target
 
 
 @pytest.fixture

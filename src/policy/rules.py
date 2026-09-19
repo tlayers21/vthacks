@@ -17,6 +17,9 @@ ORG_FALLBACK = PolicyRule(
     per_expense_limit_cents=25_000, auto_approve_limit_cents=10_000
 )
 
+# Org-wide and category-independent, so it sits here rather than in PolicyRule (spec 7.2)
+RECEIPT_REQUIRED_OVER_CENTS = 2_500
+
 # (department_id | None, category) -> rule. None means org-wide.
 POLICY_RULES: Mapping[tuple[int | None, str], PolicyRule] = MappingProxyType(
     {
