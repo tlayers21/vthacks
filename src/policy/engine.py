@@ -66,7 +66,9 @@ def evaluate_expense(
                 rule="missing_receipt",
                 severity="block",
                 message=(
-                    f"a receipt is required for anything over "
+                    "a receipt or invoice is required"
+                    if RECEIPT_REQUIRED_OVER_CENTS == 0
+                    else f"a receipt or invoice is required for anything over "
                     f"{_dollars(RECEIPT_REQUIRED_OVER_CENTS)}"
                 ),
             )

@@ -185,15 +185,15 @@ def test_over_the_threshold_with_a_receipt_is_not_blocked_by_it():
     assert result.decision == "auto_approved"
 
 
-def test_exactly_at_the_threshold_needs_no_receipt():
-    """Strictly greater-than, like every other limit in the engine."""
-    result = evaluate_expense(draft(2_500, has_receipt=False), budget(), RULES)
-    assert "missing_receipt" not in rules_fired(result)
-    assert result.decision == "auto_approved"
+def test_even_the_smallest_expense_needs_a_receipt():
+    """The threshold is zero: services/expense_flags.py has to have something to read."""
+    result = evaluate_expense(draft(1, has_receipt=False), budget(), RULES)
+    assert "missing_receipt" in rules_fired(result)
+    assert result.decision == "blocked"
 
 
-def test_under_the_threshold_needs_no_receipt():
-    result = evaluate_expense(draft(500, has_receipt=False), budget(), RULES)
+def test_a_small_expense_with_a_receipt_auto_approves():
+    result = evaluate_expense(draft(500, has_receipt=True), budget(), RULES)
     assert result.decision == "auto_approved"
     assert result.violations == ()
 
@@ -201,4 +201,6 @@ def test_under_the_threshold_needs_no_receipt():
 def test_missing_receipt_reports_alongside_the_other_rules():
     """Rules do not short-circuit, so a big receiptless expense explains itself fully."""
     result = evaluate_expense(draft(CAP + 1, has_receipt=False), budget(), RULES)
-    assert {"missing_receipt", "per_expense_cap", "approval_threshold"} <= rules_fired(result)
+    assert {"missing_receipt", "per_expense_cap", "approval_threshold"} <= rules_fired(
+        result
+    )

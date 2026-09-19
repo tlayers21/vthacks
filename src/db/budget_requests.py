@@ -66,6 +66,13 @@ def list_requests(
     ).fetchall()
 
 
+def pending_count(conn: sqlite3.Connection) -> int:
+    """Requests waiting on finance. Backs the count badge on the finance nav."""
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM budget_requests WHERE status = 'Pending'"
+    ).fetchone()["n"]
+
+
 def record_decision(
     conn: sqlite3.Connection,
     request_id: int,

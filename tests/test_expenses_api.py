@@ -27,9 +27,7 @@ def post_expense(client, attach_receipt=True, **overrides):
 
     data = {k: str(v) for k, v in fields.items() if v is not None}
     data["receipt"] = (io.BytesIO(RECEIPT_PNG), "receipt.png")
-    return client.post(
-        "/api/expenses", data=data, content_type="multipart/form-data"
-    )
+    return client.post("/api/expenses", data=data, content_type="multipart/form-data")
 
 
 # -- auto-approve pays out --------------------------------------------------
@@ -54,10 +52,13 @@ def test_auto_approved_expense_is_paid_and_moves_money(
     assert response.status_code == 201
     body = response.get_json()
     assert body["decision"] == "auto_approved"
-    assert body["status"] == "paid"
+    # 'approved', not 'paid': submit no longer moves money. The receipt check settles it,
+    # so a receipt that contradicts the claim can still hold the payout back.
+    assert body["status"] == "approved"
     assert body["violations"] == []
 
     row = expense_db.get_expense(db, body["expense_id"])
+    assert row["status"] == "paid"
     assert row["nessie_transfer_id"] is not None
     assert funded_nessie.get_balance(payer) == before_payer - 8_900
     assert funded_nessie.get_balance(payee) == before_payee + 8_900
@@ -147,8 +148,9 @@ def test_payout_failure_leaves_a_retryable_expense(client, sign_in, db, funded_n
 
     body = post_expense(client).get_json()
 
-    assert body["status"] == "payout_failed"
+    assert body["status"] == "approved"
     row = expense_db.get_expense(db, body["expense_id"])
+    assert row["status"] == "payout_failed"
     assert row["nessie_transfer_id"] is None
     assert row["policy_decision"] == "auto_approved"
 

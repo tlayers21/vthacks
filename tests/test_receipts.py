@@ -99,14 +99,17 @@ def test_over_threshold_without_a_receipt_is_blocked(client, sign_in):
     assert any(v["rule"] == "missing_receipt" for v in body["violations"])
 
 
-def test_under_threshold_without_a_receipt_is_fine(client, sign_in):
+def test_even_a_small_expense_is_blocked_without_a_receipt(client, sign_in):
+    """Every expense needs one now, because every expense gets read and compared."""
     sign_in("alex")
     response = client.post(
         "/api/expenses",
         data={"amount_cents": "1500", "category": "food"},
         content_type="multipart/form-data",
     )
-    assert response.get_json()["decision"] == "auto_approved"
+    body = response.get_json()
+    assert body["decision"] == "blocked"
+    assert any(v["rule"] == "missing_receipt" for v in body["violations"])
 
 
 @pytest.mark.parametrize(
@@ -149,7 +152,11 @@ def test_identical_files_are_stored_once(client, sign_in, db):
     for _ in range(2):
         response = client.post(
             "/api/expenses",
-            data={"amount_cents": "1000", "category": "food", **upload("same.pdf", PDF)},
+            data={
+                "amount_cents": "1000",
+                "category": "food",
+                **upload("same.pdf", PDF),
+            },
             content_type="multipart/form-data",
         )
         ids.append(response.get_json()["expense_id"])

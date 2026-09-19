@@ -162,7 +162,12 @@ INSERT INTO expenses (expense_id, customer_id, department_id, amount_cents, cate
     (8, '69b7b41defaa1749ce05d8bf', 3,    9500, 'food', 'Sweetgreen',
         'Lunch while working the weekend', 'rejected', 'needs_approval',
         '7852de1729944ce87c3eb45c', CURRENT_TIMESTAMP,
-        'Solo meals are not reimbursable -- put the weekend hours on your timesheet instead.');
+        'Solo meals are not reimbursable -- put the weekend hours on your timesheet instead.'),
+    -- The planted receipt mismatch: the folio totals $318 and the claim says $1,318. It is
+    -- over travel's $500 auto-approve limit anyway, so the policy engine would have queued it
+    -- regardless -- the flag is the only thing here the engine could not have found.
+    (9, '69b7b41defaa1749ce05d8bf', 3,  131800, 'travel', 'Hilton',
+        'Conference hotel, 2 nights', 'needs_approval', 'needs_approval', NULL, NULL, NULL);
 
 -- Receipts. Every seeded expense is over the $25 threshold, so under spec 7.2 each one needs
 -- a receipt or the engine would block it -- a row claiming 'auto_approved' or 'needs_approval'
@@ -230,6 +235,18 @@ UPDATE expenses SET
     receipt_hash = 'ca0b59413c00a04f68c7a3d102178833bdfc43ab80568313ea23a1b463e8e7c9'
 WHERE expense_id = 8;
 
+UPDATE expenses SET
+    receipt_path = 'f9a6ba50b64d71dd496ca6660abb59c363966f8fff037394e172763e07fab9b4.svg',
+    receipt_filename = 'hilton-folio.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = 'f9a6ba50b64d71dd496ca6660abb59c363966f8fff037394e172763e07fab9b4'
+WHERE expense_id = 9;
+
+-- Every other seeded expense agrees with its receipt, so their checks are seeded clean. Only
+-- expense 9 disagrees, and it is the one the manager should be able to see without a network.
+UPDATE expenses SET receipt_check = 'clean' WHERE expense_id BETWEEN 1 AND 8;
+UPDATE expenses SET receipt_check = 'flagged' WHERE expense_id = 9;
+
 -- ---------------------------------------------------------------------------
 -- 8. The violations those expenses recorded at submission time. Written out rather than
 --    recomputed so the demo shows exactly what the engine said on the day.
@@ -250,4 +267,42 @@ INSERT INTO expense_violations (violation_id, expense_id, rule, severity, messag
     (7, 6, 'approval_threshold', 'warn',
         '$16,000.00 is over the $2,500.00 auto-approve limit for marketing'),
     (8, 8, 'approval_threshold', 'warn',
-        '$95.00 is over the $75.00 auto-approve limit for food');
+        '$95.00 is over the $75.00 auto-approve limit for food'),
+    (9, 9, 'approval_threshold', 'warn',
+        '$1,318.00 is over the $500.00 auto-approve limit for travel');
+
+-- ---------------------------------------------------------------------------
+-- 9. What the receipt reader found (spec 8.1). Written out rather than left for the first
+--    page load, so the demo shows a read receipt with no API key and no network -- and so
+--    `init_db.py` and `seed.py` produce the same database.
+--
+--    One row per distinct receipt file, because that is what the cache is keyed by.
+--    Regenerate alongside section 7 if a sample file changes: the hash is the filename.
+-- ---------------------------------------------------------------------------
+INSERT INTO receipt_readings (receipt_hash, status, merchant, total_cents, receipt_date,
+                              line_items, model) VALUES
+    ('c8fb99c070f0b6751ea1defc020d8418acdcbb9573b0258d069a61b0fcbd1d2c', 'read',
+        'FIGMA INC', 8900, '2026-09-03', '[]', 'seed'),
+    ('40147d97866e70ce026738816d867f68c6793bda431483549de1eb7134cef2eb', 'read',
+        'OLIVE GARDEN', 18000, '2026-09-12', '[]', 'seed'),
+    ('2cac6c659e2b4cd2c0a1da83edb8265fa5e0877cde7ff640ea961ea3d06bfd5e', 'read',
+        'APPLE STORE', 620000, '2026-09-14', '[]', 'seed'),
+    ('53fbe6272dedc675f845c7b6c0435dbf4418653eb72f6bc4a587fbe78394b802', 'read',
+        'META PLATFORMS', 1800000, '2026-09-01', '[]', 'seed'),
+    ('3229c0fdafddd3fb0acb86dc6e97e23d539e296a5f811a6bf50a59213e156c0e', 'read',
+        'GOOGLE ADS', 1640000, '2026-09-01', '[]', 'seed'),
+    ('55c2dff47f71448a1ead333882b646606ff094ce4c2e0edabcc528f4dd004f4c', 'read',
+        'LINKEDIN CORP', 1600000, '2026-09-02', '[]', 'seed'),
+    ('d2977ca162764a790e1968bc103daa443da5c26054f3c72a4f37051358c7e5c4', 'read',
+        'DELTA AIR LINES', 42000, '2026-09-09', '[]', 'seed'),
+    ('ca0b59413c00a04f68c7a3d102178833bdfc43ab80568313ea23a1b463e8e7c9', 'read',
+        'SWEETGREEN', 9500, '2026-09-13', '[]', 'seed'),
+    ('f9a6ba50b64d71dd496ca6660abb59c363966f8fff037394e172763e07fab9b4', 'read',
+        'HILTON ATLANTA', 31800, '2026-09-14', '[]', 'seed');
+
+-- ---------------------------------------------------------------------------
+-- 10. The flag that reading produced. tests/test_seed_consistency.py recomputes it with
+--     services.expense_flags.compare, so this row cannot drift from the rule that made it.
+-- ---------------------------------------------------------------------------
+INSERT INTO expense_flags (flag_id, expense_id, flag, message) VALUES
+    (1, 9, 'amount_mismatch', 'Receipt totals $318.00 but $1,318.00 was claimed.');

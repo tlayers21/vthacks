@@ -29,6 +29,8 @@ def submit_expense(
     description: str | None = None,
     receipt=None,
     nessie=None,
+    reader=None,
+    background: bool = False,
 ) -> dict:
     """`receipt` is a services.receipts.StoredReceipt, already written to disk."""
     if not can_submit(actor):
@@ -52,9 +54,9 @@ def submit_expense(
         expense_id = expense_db.insert_expense(conn, draft, result, status, receipt)
 
     # Outside the transaction above: never hold a SQLite write lock across a network call.
-    # A blocked expense keeps its row -- the submitter needs to see why it was refused.
-    if result.decision == "auto_approved":
-        status = pay_expense(conn, expense_id, nessie)
+    # An auto-approved expense is not paid here any more. The receipt check settles it, and
+    # money that moved before anyone read the receipt could not be held back by a flag.
+    check_receipt(conn, expense_id, reader=reader, nessie=nessie, background=background)
 
     return {
         "expense_id": expense_id,
@@ -62,6 +64,26 @@ def submit_expense(
         "decision": result.decision,
         "violations": [v.as_dict() for v in result.violations],
     }
+
+
+def check_receipt(
+    conn: sqlite3.Connection,
+    expense_id: int,
+    reader=None,
+    nessie=None,
+    background: bool = False,
+) -> None:
+    """Hand the expense to the receipt check, on a thread or not.
+
+    Threaded in the real app so the submit form returns at once; inline under tests, which
+    hold one connection and need the verdict to exist by the time they assert on it.
+    """
+    from services import expense_flags
+
+    if background:
+        expense_flags.check_expense_async(expense_id, reader, nessie)
+    else:
+        expense_flags.check_expense_safely(conn, expense_id, reader, nessie)
 
 
 def preview_expense(conn: sqlite3.Connection, draft: ExpenseDraft) -> PolicyResult:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import money, money_short, badge, status_badge, violation_list, category_chip, empty_state, icon %}
+{% from "_macros.html" import money, money_short, badge, status_badge, violation_list, flag_list, reading_summary, category_chip, empty_state, icon %}
 
 {#- An employee is looking at their own submissions; everyone else is reviewing someone's -#}
 {% set as_submitter = actor.role == 'Employee' %}
@@ -113,7 +113,7 @@
                                     {% if expense.receipt_path %}
                                         <a class="receipt-link" href="/receipts/{{ expense.expense_id }}"
                                            target="_blank" rel="noopener noreferrer">
-                                            {{ icon('receipt', 'violation-icon') }}<span>Receipt</span>
+                                            {{ icon('receipt', 'violation-icon') }}<span>Receipt or invoice</span>
                                         </a>
                                     {% endif %}
                                 </td>
@@ -138,9 +138,13 @@
                                     {% endif %}
                                 </td>
                                 {% if not as_submitter %}
+                                    {#- Policy verdict and receipt check together, and neither is
+                                        emitted for a submitter: the whole column is skipped -#}
                                     <td>
                                         {{ badge(expense.policy_decision) }}
                                         {{ violation_list(violations.get(expense.expense_id, [])) }}
+                                        {{ flag_list(flags.get(expense.expense_id, [])) }}
+                                        {{ reading_summary(readings.get(expense.expense_id)) }}
                                     </td>
                                     <td>
                                         <span class="whitespace-nowrap">{{ expense.submitter_name }}</span>

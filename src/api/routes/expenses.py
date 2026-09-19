@@ -3,7 +3,7 @@
 from flask import Blueprint, jsonify, request
 from pydantic import ValidationError
 
-from api.deps import current_user, get_conn, get_nessie
+from api.deps import check_async, current_user, get_conn, get_nessie, get_reader
 from api.schemas import DecisionIn, ExpenseIn
 from db import expenses as expense_db
 from services import expenses as expense_service
@@ -57,6 +57,8 @@ def create_expense():
             description=payload.description,
             receipt=receipt,
             nessie=get_nessie(),
+            reader=get_reader(),
+            background=check_async(),
         )
     except Forbidden as exc:
         return jsonify(error=str(exc)), 403
@@ -78,11 +80,17 @@ def list_expenses():
 
     conn = get_conn()
     rows = expense_db.list_expenses(conn, **filters)
-    violations = expense_db.violations_for(conn, [r["expense_id"] for r in rows])
+    ids = [r["expense_id"] for r in rows]
+    violations = expense_db.violations_for(conn, ids)
+    flags = expense_db.flags_for(conn, ids)
     return jsonify(
         scope=scope,
         expenses=[
-            {**dict(row), "violations": violations.get(row["expense_id"], [])}
+            {
+                **dict(row),
+                "violations": violations.get(row["expense_id"], []),
+                "flags": flags.get(row["expense_id"], []),
+            }
             for row in rows
         ],
     )
@@ -156,4 +164,5 @@ def get_one(expense_id: int):
     if not can_view_expense(actor, expense):
         return jsonify(error="not yours"), 403
     violations = expense_db.violations_for(conn, [expense_id]).get(expense_id, [])
-    return jsonify({**dict(expense), "violations": violations})
+    flags = expense_db.flags_for(conn, [expense_id]).get(expense_id, [])
+    return jsonify({**dict(expense), "violations": violations, "flags": flags})

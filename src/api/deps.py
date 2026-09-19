@@ -18,6 +18,14 @@ def get_nessie():
     return current_app.config["NESSIE"]
 
 
+def get_reader():
+    return current_app.config["READER"]
+
+
+def check_async() -> bool:
+    return bool(current_app.config.get("CHECK_ASYNC"))
+
+
 def close_conn(_exc=None) -> None:
     conn = g.pop("conn", None)
     # Tests hand in a shared connection they still need afterwards

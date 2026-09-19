@@ -114,3 +114,82 @@ def test_receipt_hash_matches_the_stored_filename(db):
     for expense in seeded_expenses(db):
         if expense["receipt_path"]:
             assert expense["receipt_path"].startswith(expense["receipt_hash"])
+
+
+def test_the_seeded_flag_is_what_compare_would_have_produced(db):
+    """The planted mismatch is written out, so nothing stops it drifting from the rule that
+    made it. Recomputing it here is what keeps the demo honest."""
+    import json
+
+    from services.expense_flags import compare
+
+    for expense in seeded_expenses(db):
+        reading = db.execute(
+            "SELECT * FROM receipt_readings WHERE receipt_hash = ?",
+            (expense["receipt_hash"],),
+        ).fetchone()
+        assert reading is not None, f"expense {expense['expense_id']} has no reading"
+
+        expected = compare(
+            expense,
+            {
+                "status": reading["status"],
+                "merchant": reading["merchant"],
+                "total_cents": reading["total_cents"],
+                "receipt_date": reading["receipt_date"],
+                "line_items": json.loads(reading["line_items"] or "[]"),
+                "category_consistent": None,
+                "note": "",
+            },
+        )
+        seeded = expense_db.flags_for(db, [expense["expense_id"]]).get(
+            expense["expense_id"], []
+        )
+        assert [f.flag for f in expected] == [f["flag"] for f in seeded]
+        assert [f.message for f in expected] == [f["message"] for f in seeded]
+        assert expense["receipt_check"] == ("flagged" if expected else "clean")
+
+
+def test_the_seeded_readings_match_the_sample_files(db):
+    """The reading is seeded so the demo needs no network; it still has to be a true reading."""
+    from llm import content_for, get_reader
+    from services.receipts import install_samples, resolve
+
+    install_samples()
+    reader = get_reader("mock")
+    for expense in seeded_expenses(db):
+        reading = db.execute(
+            "SELECT * FROM receipt_readings WHERE receipt_hash = ?",
+            (expense["receipt_hash"],),
+        ).fetchone()
+        read = reader.read(
+            content_for(resolve(expense["receipt_path"]), expense["receipt_mime"])
+        )
+        assert read["merchant"] == reading["merchant"]
+        assert read["total_cents"] == reading["total_cents"]
+        assert read["receipt_date"] == reading["receipt_date"]
+
+
+def test_the_nessie_seed_path_carries_every_table_the_sql_one_does():
+    """`init_db.py` runs seed.sql; `db/seed.py` reads it into memory and re-inserts row by
+    row, so a table added to the schema and not to that list silently vanishes from
+    `--mode mock|real`. This is what noticed receipt_readings going missing."""
+    import re
+
+    from db.seed import SCHEMA, load_reference_org
+
+    tables = set(re.findall(r"CREATE TABLE (\w+)", SCHEMA.read_text()))
+    assert tables - set(load_reference_org()) == set()
+
+
+def test_the_nessie_seed_path_writes_the_columns_it_reads():
+    """Reading a table is not inserting it. Every column seed.sql fills has to survive."""
+    from db.seed import SEED, load_reference_org
+
+    org = load_reference_org()
+    seed_py = (SEED.parent / "seed.py").read_text()
+    for table in ("receipt_readings", "expense_flags"):
+        assert f"INSERT INTO {table}" in seed_py, (
+            f"{table} is read but never re-inserted"
+        )
+        assert org[table], f"{table} has no seeded rows to carry"

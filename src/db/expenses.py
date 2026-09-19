@@ -3,6 +3,7 @@
 Kept out of services/ so the rule that only db/ executes SQL keeps holding.
 """
 
+import json
 import sqlite3
 
 from policy import DepartmentBudget, ExpenseDraft, PolicyResult
@@ -51,9 +52,9 @@ def insert_expense(
     cursor = conn.execute(
         "INSERT INTO expenses"
         " (customer_id, department_id, amount_cents, category, merchant, description,"
-        "  status, policy_decision,"
+        "  status, policy_decision, receipt_check,"
         "  receipt_path, receipt_filename, receipt_mime, receipt_hash)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             draft.customer_id,
             draft.department_id,
@@ -63,6 +64,9 @@ def insert_expense(
             draft.description,
             status,
             result.decision,
+            # 'pending' rather than NULL from the start: a row with a receipt and no check
+            # in flight would be indistinguishable from one nobody ever looked at
+            "pending" if receipt else "skipped",
             receipt.path if receipt else None,
             receipt.filename if receipt else None,
             receipt.mime if receipt else None,
@@ -100,6 +104,101 @@ def violations_for(
     for row in rows:
         grouped.setdefault(row["expense_id"], []).append(dict(row))
     return grouped
+
+
+def flags_for(
+    conn: sqlite3.Connection, expense_ids: list[int]
+) -> dict[int, list[dict]]:
+    """Receipt-check findings, grouped like violations_for so templates treat them alike."""
+    if not expense_ids:
+        return {}
+    placeholders = ",".join("?" * len(expense_ids))
+    rows = conn.execute(
+        f"SELECT expense_id, flag, message FROM expense_flags"
+        f" WHERE expense_id IN ({placeholders}) ORDER BY flag_id",
+        expense_ids,
+    ).fetchall()
+    grouped: dict[int, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row["expense_id"], []).append(dict(row))
+    return grouped
+
+
+def readings_for(
+    conn: sqlite3.Connection, expense_ids: list[int]
+) -> dict[int, sqlite3.Row]:
+    """The reading behind each expense's flags, keyed by expense rather than by hash.
+
+    Joined on the hash because that is what the reading is cached by -- two expenses that
+    attached the same file share one row, and both should show it.
+    """
+    if not expense_ids:
+        return {}
+    placeholders = ",".join("?" * len(expense_ids))
+    rows = conn.execute(
+        f"SELECT e.expense_id, r.* FROM expenses e"
+        f" JOIN receipt_readings r ON r.receipt_hash = e.receipt_hash"
+        f" WHERE e.expense_id IN ({placeholders})",
+        expense_ids,
+    ).fetchall()
+    return {row["expense_id"]: row for row in rows}
+
+
+def get_reading(conn: sqlite3.Connection, receipt_hash: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM receipt_readings WHERE receipt_hash = ?", (receipt_hash,)
+    ).fetchone()
+
+
+def save_reading(
+    conn: sqlite3.Connection, receipt_hash: str, reading: dict, model: str
+) -> None:
+    """Upsert the cached reading. A re-read of the same bytes replaces the old one."""
+    conn.execute(
+        "INSERT INTO receipt_readings"
+        " (receipt_hash, status, merchant, total_cents, receipt_date, line_items, model)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(receipt_hash) DO UPDATE SET"
+        "   status = excluded.status, merchant = excluded.merchant,"
+        "   total_cents = excluded.total_cents, receipt_date = excluded.receipt_date,"
+        "   line_items = excluded.line_items, model = excluded.model,"
+        "   read_at = CURRENT_TIMESTAMP",
+        (
+            receipt_hash,
+            reading["status"],
+            reading["merchant"],
+            reading["total_cents"],
+            reading["receipt_date"],
+            json.dumps(reading["line_items"]),
+            model,
+        ),
+    )
+
+
+def replace_flags(conn: sqlite3.Connection, expense_id: int, flags) -> None:
+    """Delete then insert, so a re-check states the whole finding rather than adding to it."""
+    conn.execute("DELETE FROM expense_flags WHERE expense_id = ?", (expense_id,))
+    conn.executemany(
+        "INSERT INTO expense_flags (expense_id, flag, message) VALUES (?, ?, ?)",
+        [(expense_id, f.flag, f.message) for f in flags],
+    )
+
+
+def set_receipt_check(conn: sqlite3.Connection, expense_id: int, state: str) -> None:
+    conn.execute(
+        "UPDATE expenses SET receipt_check = ? WHERE expense_id = ?",
+        (state, expense_id),
+    )
+
+
+def pending_count(conn: sqlite3.Connection, department_id: int | None = None) -> int:
+    """Expenses waiting on a human. Backs the count badge on the manager's nav."""
+    sql = "SELECT COUNT(*) AS n FROM expenses WHERE status = 'needs_approval'"
+    params: list = []
+    if department_id is not None:
+        sql += " AND department_id = ?"
+        params.append(department_id)
+    return conn.execute(sql, params).fetchone()["n"]
 
 
 def payout_accounts(conn: sqlite3.Connection, expense_id: int) -> tuple[str, str]:

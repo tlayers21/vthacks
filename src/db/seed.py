@@ -53,6 +53,10 @@ def load_reference_org() -> dict:
         "expense_violations": [
             dict(r) for r in mem.execute("SELECT * FROM expense_violations")
         ],
+        "receipt_readings": [
+            dict(r) for r in mem.execute("SELECT * FROM receipt_readings")
+        ],
+        "expense_flags": [dict(r) for r in mem.execute("SELECT * FROM expense_flags")],
     }
     mem.close()
     return org
@@ -208,9 +212,9 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                 "INSERT INTO expenses"
                 " (expense_id, customer_id, department_id, amount_cents, category, merchant,"
                 "  description, status, policy_decision, decided_by, decided_at,"
-                "  decision_note,"
+                "  decision_note, receipt_check,"
                 "  receipt_path, receipt_filename, receipt_mime, receipt_hash)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     expense["expense_id"],
                     customer_ids[expense["customer_id"]],
@@ -226,10 +230,40 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                     else None,
                     expense["decided_at"],
                     expense["decision_note"],
+                    expense["receipt_check"],
                     expense["receipt_path"],
                     expense["receipt_filename"],
                     expense["receipt_mime"],
                     expense["receipt_hash"],
+                ),
+            )
+
+        # Keyed by receipt_hash, which is never remapped -- it is the file's own sha256
+        for reading in org["receipt_readings"]:
+            conn.execute(
+                "INSERT INTO receipt_readings"
+                " (receipt_hash, status, merchant, total_cents, receipt_date, line_items,"
+                "  model) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    reading["receipt_hash"],
+                    reading["status"],
+                    reading["merchant"],
+                    reading["total_cents"],
+                    reading["receipt_date"],
+                    reading["line_items"],
+                    reading["model"],
+                ),
+            )
+
+        for flag in org["expense_flags"]:
+            conn.execute(
+                "INSERT INTO expense_flags (flag_id, expense_id, flag, message)"
+                " VALUES (?, ?, ?, ?)",
+                (
+                    flag["flag_id"],
+                    flag["expense_id"],
+                    flag["flag"],
+                    flag["message"],
                 ),
             )
 
@@ -258,7 +292,8 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
         f"{len(org['departments'])} departments, "
         f"{len(org['budget_requests'])} budget requests, "
         f"{len(org['expenses'])} expenses, "
-        f"{len(org['expense_violations'])} violations -> {settings.db_path}"
+        f"{len(org['expense_violations'])} violations, "
+        f"{len(org['expense_flags'])} receipt flags -> {settings.db_path}"
     )
     conn.close()
 

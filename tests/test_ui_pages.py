@@ -3,6 +3,8 @@ time, so without these a broken page only shows up in the browser."""
 
 import pytest
 
+from db import expenses as expense_db
+
 PAGES_BY_ROLE = [
     ("alex", ["/expenses/new", "/expenses/mine", "/policies"]),
     ("marcus", ["/approvals", "/funding", "/expenses/all", "/policies"]),
@@ -110,3 +112,67 @@ def test_approvals_posts_decisions_to_the_api_route(client, sign_in):
     sign_in("priya")
     body = client.get("/approvals").get_data(as_text=True)
     assert "/api/expenses/${id}/decision" in body
+
+
+# -- nav count badges -------------------------------------------------------
+
+
+def test_a_manager_sees_a_count_of_what_is_waiting_on_them(client, sign_in, db):
+    tomas = sign_in("tomas")
+    waiting = expense_db.pending_count(db, tomas["department_id"])
+    assert waiting  # the seed plants some, or this asserts nothing
+
+    page = client.get("/approvals").get_data(as_text=True)
+    assert f'class="nav-count" aria-label="{waiting} waiting">{waiting}<' in page
+
+
+def test_the_count_falls_as_the_work_is_done(client, sign_in, db):
+    """No 'seen' state anywhere: the badge is the backlog, so deciding clears it."""
+    tomas = sign_in("tomas")
+    before = expense_db.pending_count(db, tomas["department_id"])
+    expense_id = expense_db.list_expenses(
+        db, department_id=tomas["department_id"], statuses=("needs_approval",)
+    )[0]["expense_id"]
+
+    client.post(
+        f"/api/expenses/{expense_id}/decision",
+        json={"approve": False, "note": "Not this month."},
+    )
+
+    assert expense_db.pending_count(db, tomas["department_id"]) == before - 1
+
+
+def test_finance_is_counted_on_funding_rather_than_approvals(client, sign_in, db):
+    from db import budget_requests as request_db
+
+    sign_in("dana")
+    waiting = request_db.pending_count(db)
+    page = client.get("/finance").get_data(as_text=True)
+
+    funding_link = page.split('href="/funding"')[1].split("</a>")[0]
+    assert (
+        f'class="nav-count" aria-label="{waiting} waiting">{waiting}<' in funding_link
+    )
+
+
+def test_an_employee_has_nothing_waiting_on_them(client, sign_in):
+    sign_in("omar")
+    # The class is in the stylesheet either way; what must be absent is a badge
+    assert 'class="nav-count"' not in client.get("/expenses/mine").get_data(
+        as_text=True
+    )
+
+
+# -- the mark goes home -----------------------------------------------------
+
+
+def test_the_logo_links_home_without_swallowing_the_close_button(client, sign_in):
+    """An <a> around the close button made closing the menu navigate away."""
+    sign_in("omar")
+    page = client.get("/expenses/mine").get_data(as_text=True)
+
+    assert (
+        page.count('<a href="/" class="flex items-center gap') == 2
+    )  # sidebar and mobile bar
+    opened = page.split('<a href="/" class="flex items-center gap')[1]
+    assert "data-sidebar-close" not in opened.split("</a>")[0]

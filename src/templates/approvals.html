@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import money, money_short, budget_bar, violation_list, category_chip, empty_state, icon, receipt_preview %}
+{% from "_macros.html" import money, money_short, budget_bar, violation_list, flag_list, reading_summary, receipt_check_pill, category_chip, empty_state, icon, receipt_preview %}
 {% block title %}Approvals{% endblock %}
 {% block page_title %}Approval queue{% endblock %}
 {% block page_subtitle %}
@@ -63,6 +63,7 @@
                         <p class="text-2xl font-semibold tracking-tight">{{ money(expense.amount_cents) }}</p>
                         {{ category_chip(expense.category) }}
                     </div>
+                    <div class="mt-1.5">{{ receipt_check_pill(expense.receipt_check) }}</div>
 
                     <p class="mt-1 font-medium">{{ expense.merchant or expense.category }}</p>
                     <p class="mt-0.5 text-xs text-muted">
@@ -75,8 +76,10 @@
                     {% endif %}
 
                     {{ violation_list(violations.get(expense.expense_id, [])) }}
+                    {{ flag_list(flags.get(expense.expense_id, [])) }}
 
                     {{ receipt_preview(expense) }}
+                    {{ reading_summary(readings.get(expense.expense_id)) }}
 
                     <div class="mt-auto pt-4">
                         <div class="flex gap-2" data-actions>
@@ -118,6 +121,12 @@
 {% block scripts %}
     <script>
         const queue = document.getElementById("queue");
+
+        // The receipt check runs after submit returns, so a card can render mid-check.
+        // One reload rather than polling: the queue is small and the check is seconds long.
+        if (document.querySelector("[data-check-pending]")) {
+            setTimeout(() => location.reload(), 4000);
+        }
 
         function rejectForm(id) { return document.querySelector(`[data-reject-form="${id}"]`); }
         function actions(id) { return document.querySelector(`[data-card="${id}"] [data-actions]`); }

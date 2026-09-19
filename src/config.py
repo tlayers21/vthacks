@@ -49,6 +49,17 @@ class Settings:
         "NESSIE_BASE_URL", "https://prod-api.nessieisreal.com"
     )
 
+    # Reads receipts and compares them against what was claimed. "mock" parses the sample
+    # SVGs offline, so a fresh checkout with no key still shows the whole flow.
+    llm_mode = os.environ.get("LLM_MODE", "mock")
+    llm_api_key = os.environ.get("LLM_API_KEY", "")
+    llm_base_url = os.environ.get("LLM_BASE_URL", "https://llm-api.arc.vt.edu/api/v1")
+    llm_model = os.environ.get("LLM_MODEL", "DeepSeek-V4.1-Flash")
+    llm_timeout = float(os.environ.get("LLM_TIMEOUT") or 30)
+    # A raster receipt is base64'd into the request body, so the cap here is well under the
+    # 10MB upload cap -- anything larger is reported unsupported rather than sent
+    llm_max_image_bytes = int(os.environ.get("LLM_MAX_IMAGE_BYTES") or 4 * 1024 * 1024)
+
     # Signs the session cookie used by the role switcher.
     secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
 

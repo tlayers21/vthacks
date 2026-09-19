@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="392" viewBox="0 0 360 392">
+  <style>
+    text { font-family: "Courier New", monospace; fill: #1a1a1a; }
+    .h { font-size: 19px; font-weight: bold; letter-spacing: 1px; }
+    .s { font-size: 11px; fill: #666; }
+    .i { font-size: 13px; }
+    .r { text-anchor: end; }
+    .t { font-size: 15px; font-weight: bold; }
+    .f { font-size: 10px; fill: #888; }
+  </style>
+  <rect width="360" height="392" fill="#fffdf8"/>
+  <rect x="8" y="8" width="344" height="376" fill="#fff" stroke="#e2ded4"/>
+  <text x="180" y="48" class="h" text-anchor="middle">HILTON ATLANTA</text>
+  <text x="180" y="66" class="s" text-anchor="middle">255 Courtland St NE, Atlanta GA</text>
+  <text x="180" y="82" class="s" text-anchor="middle">Sept 14, 2026  11:04 AM</text>
+  <line x1="24" y1="100" x2="336" y2="100" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="118" class="s">ITEM</text><text x="336" y="118" class="s r">AMOUNT</text>
+  <text x="24" y="132" class="i">Room, Sept 12  King</text><text x="336" y="132" class="i r">$129.00</text>
+  <text x="24" y="154" class="i">Room, Sept 13  King</text><text x="336" y="154" class="i r">$129.00</text>
+  <text x="24" y="176" class="i">Parking, 2 nights</text><text x="336" y="176" class="i r">$34.00</text>
+  <line x1="24" y1="202" x2="336" y2="202" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="226" class="i">Subtotal</text><text x="336" y="226" class="i r">$292.00</text>
+  <text x="24" y="248" class="i">Occupancy tax</text><text x="336" y="248" class="i r">$26.00</text>
+  <line x1="24" y1="260" x2="336" y2="260" stroke="#333"/>
+  <text x="24" y="284" class="t">TOTAL</text><text x="336" y="284" class="t r">$318.00</text>
+  <text x="180" y="312" class="f" text-anchor="middle">FOLIO 884120  ROOM 1417</text>
+  <text x="180" y="330" class="f" text-anchor="middle">VISA ****4417  APPROVED</text>
+  <text x="180" y="356" class="f" text-anchor="middle">*** SAMPLE RECEIPT - NOT A REAL TRANSACTION ***</text>
+</svg>

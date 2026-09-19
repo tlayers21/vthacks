@@ -166,6 +166,42 @@
                 .violations li.block { background: var(--color-crit-soft); color: var(--color-crit-ink); border-left-color: var(--color-crit); }
                 .violation-icon { width: 1rem; height: 1rem; flex: none; margin-top: 0.1rem; }
 
+                /* -- receipt check -------------------------------------------- */
+                /* Dashed, where a violation is solid: the engine ruled, the reader only looked */
+                .flags { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.375rem; }
+                .flags li {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 0.5rem;
+                    font-size: 0.8125rem;
+                    line-height: 1.45;
+                    padding: 0.4rem 0.6rem;
+                    border-radius: 0.5rem;
+                    border: 1px dashed transparent;
+                }
+                .flags li.warn { background: var(--color-warn-soft); color: var(--color-warn-ink); border-color: var(--color-warn); }
+                .flags li.crit { background: var(--color-crit-soft); color: var(--color-crit-ink); border-color: var(--color-crit); }
+                .flag-label { font-weight: 600; }
+                .reading { margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--color-muted); }
+                .reading dt { display: inline; font-weight: 600; }
+                .reading dt::after { content: ':'; }
+                .reading dd { display: inline; margin: 0 0 0 0.3rem; }
+
+                /* -- nav count ------------------------------------------------ */
+                /* The status scale, never the brand one: this is a backlog, not a flourish */
+                .nav-count {
+                    margin-left: auto;
+                    min-width: 1.25rem;
+                    padding: 0 0.35rem;
+                    border-radius: 999px;
+                    background: var(--color-crit);
+                    color: #fff;
+                    font-size: 0.6875rem;
+                    font-weight: 700;
+                    line-height: 1.25rem;
+                    text-align: center;
+                }
+
                 /* -- receipts ------------------------------------------------ */
                 .receipt {
                     display: block;
@@ -403,23 +439,27 @@
                         <button type="button" class="btn btn-ghost btn-sm" data-sidebar-open aria-label="Open menu">
                             {{ icon('menu', 'nav-icon') }}
                         </button>
-                        {{ brand_mark(brand_assets, 'h-7 w-7') }}
-                        <span class="font-semibold tracking-tight">Nessence</span>
+                        <a href="{{ url_for('ui.home') }}" class="flex items-center gap-3">
+                            {{ brand_mark(brand_assets, 'h-7 w-7') }}
+                            <span class="font-semibold tracking-tight">Nessence</span>
+                        </a>
                     </div>
 
                     <aside data-sidebar
                            class="fixed inset-y-0 left-0 z-50 w-64 -translate-x-full transform border-r border-line bg-surface transition-transform duration-200
                                   lg:static lg:translate-x-0 lg:transition-none flex flex-col">
-                        <a href="{{ url_for('ui.home') }}"><div class="flex items-center gap-2.5 px-5 py-5">
-                            {{ brand_mark(brand_assets) }}
-                            <span class="font-semibold tracking-tight">Nessence</span>
+                        <div class="flex items-center gap-2.5 px-5 py-5">
+                            <a href="{{ url_for('ui.home') }}" class="flex items-center gap-2.5">
+                                {{ brand_mark(brand_assets) }}
+                                <span class="font-semibold tracking-tight">Nessence</span>
+                            </a>
                             <button type="button" class="btn btn-ghost btn-sm ml-auto lg:hidden"
                                     data-sidebar-close aria-label="Close menu">{{ icon('close', 'nav-icon') }}</button>
-                        </div></a>
+                        </div>
 
                         <nav class="flex flex-col gap-1 px-3">
                             {% for href, label, name in nav_items %}
-                                {{ nav_link(href, label, name, request.path == href) }}
+                                {{ nav_link(href, label, name, request.path == href, nav_counts.get(href, 0)) }}
                             {% endfor %}
                         </nav>
 

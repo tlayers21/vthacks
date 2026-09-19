@@ -81,6 +81,11 @@ CREATE TABLE expenses (
     receipt_filename TEXT,
     receipt_mime TEXT,
     receipt_hash TEXT,
+    -- Where the receipt check got to. Separate from policy_decision because the engine never
+    -- looks at a receipt, and unlike a violation this is not reproducible from the row
+    receipt_check TEXT CHECK (receipt_check IN (
+        'pending', 'clean', 'flagged', 'skipped', 'failed'
+    )),
     -- UNIQUE is the idempotency guard, enforced by the database rather than by remembering to
     -- check. SQLite allows many NULLs here, so unpaid rows are fine
     nessie_transfer_id TEXT UNIQUE,
@@ -101,5 +106,40 @@ CREATE TABLE expense_violations (
     )),
     severity TEXT NOT NULL CHECK (severity IN ('block', 'warn')),
     message TEXT NOT NULL,
+    FOREIGN KEY (expense_id) REFERENCES expenses(expense_id) ON DELETE CASCADE
+);
+
+-- What a model read off a receipt, cached by the file hash rather than by the expense:
+-- services/receipts.py dedupes identical bytes to one file on disk, so they are one reading
+-- too, and a resubmitted receipt costs nothing. spec 8.1.
+CREATE TABLE receipt_readings (
+    receipt_hash TEXT PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN (
+        'read', 'unreadable', 'unsupported', 'failed'
+    )),
+    merchant VARCHAR(100),
+    total_cents INTEGER,
+    -- ISO 8601, and NULL whenever the receipt did not print a date we could parse
+    receipt_date TEXT,
+    -- JSON array of strings, shown to the approver and never parsed back into money
+    line_items TEXT,
+    model TEXT NOT NULL,
+    read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- A violation is what the engine decided and can be recomputed from the row at any time; a
+-- flag is what a model noticed and cannot. Separate tables so a query can never confuse the
+-- two, and so nothing an LLM said ever lands in the policy engine's vocabulary.
+CREATE TABLE expense_flags (
+    flag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    expense_id INTEGER NOT NULL,
+    flag TEXT NOT NULL CHECK (flag IN (
+        'amount_mismatch', 'merchant_mismatch', 'category_mismatch',
+        'stale_receipt', 'unreadable_receipt'
+    )),
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Makes a re-check replace a flag rather than stack a second copy of it
+    UNIQUE (expense_id, flag),
     FOREIGN KEY (expense_id) REFERENCES expenses(expense_id) ON DELETE CASCADE
 );

@@ -14,12 +14,7 @@ from api.deps import actor_with_role, current_user, get_conn, switchable_users
 from db import budget_requests as request_db
 from db import expenses as expense_db
 from db.ledger import transaction_ledger
-from policy import (
-    CATEGORIES,
-    RECEIPT_REQUIRED_OVER_CENTS,
-    overridden_categories,
-    resolved_rules,
-)
+from policy import CATEGORIES, overridden_categories, resolved_rules
 from services.permissions import can_submit, default_scope, visible_expense_filter
 
 bp = Blueprint("ui", __name__)
@@ -35,7 +30,23 @@ def inject_user():
         "switchable_users": switchable_users(conn),
         "categories": CATEGORIES,
         "may_submit": actor is not None and can_submit(actor),
+        "nav_counts": _nav_counts(conn, actor),
     }
+
+
+def _nav_counts(conn, actor) -> dict[str, int]:
+    """Work waiting on this person, keyed by the nav link that leads to it.
+
+    A live count of the backlog, not an unread marker -- which is why nothing has to mark
+    it seen. The badge disappears because the work is gone, not because it was looked at.
+    """
+    if actor is None:
+        return {}
+    if actor["role"] == "Manager":
+        return {"/approvals": expense_db.pending_count(conn, actor["department_id"])}
+    if actor["role"] == "Finance":
+        return {"/funding": request_db.pending_count(conn)}
+    return {}
 
 
 @bp.app_context_processor
@@ -71,13 +82,7 @@ def new_expense():
     if actor is None or not can_submit(actor):
         return redirect("/")
     budget = expense_db.department_budget(get_conn(), actor["department_id"])
-    # Passed through so the form can gate its own submit button without waiting for the
-    # debounced preview, and without hardcoding a second copy of the threshold
-    return render_template(
-        "new_expense.html",
-        budget=budget,
-        receipt_threshold_cents=RECEIPT_REQUIRED_OVER_CENTS,
-    )
+    return render_template("new_expense.html", budget=budget)
 
 
 @bp.get("/expenses/mine")
@@ -98,11 +103,13 @@ def approvals():
     conn = get_conn()
     filters = visible_expense_filter(actor, default_scope(actor))
     rows = expense_db.list_expenses(conn, statuses=("needs_approval",), **filters)
-    violations = expense_db.violations_for(conn, [r["expense_id"] for r in rows])
+    ids = [r["expense_id"] for r in rows]
     return render_template(
         "approvals.html",
         expenses=rows,
-        violations=violations,
+        violations=expense_db.violations_for(conn, ids),
+        flags=expense_db.flags_for(conn, ids),
+        readings=expense_db.readings_for(conn, ids),
         budget=expense_db.department_budget(conn, actor["department_id"]),
     )
 
@@ -189,7 +196,10 @@ def all_expenses():
 def _expense_view(actor, scope: str) -> dict:
     conn = get_conn()
     rows = expense_db.list_expenses(conn, **visible_expense_filter(actor, scope))
+    ids = [r["expense_id"] for r in rows]
     return {
         "expenses": rows,
-        "violations": expense_db.violations_for(conn, [r["expense_id"] for r in rows]),
+        "violations": expense_db.violations_for(conn, ids),
+        "flags": expense_db.flags_for(conn, ids),
+        "readings": expense_db.readings_for(conn, ids),
     }

@@ -86,6 +86,49 @@
 {% endmacro %}
 
 
+{#- What the receipt check found. Deliberately not styled as a violation: a violation is the
+    engine's ruling and a flag is a model's observation, and a manager deciding someone's dinner
+    is owed the difference. -#}
+{% macro flag_list(items) %}
+    {% if items %}
+        <ul class="flags">
+            {% for f in items %}
+                <li class="{{ 'crit' if f.flag in ('amount_mismatch', 'merchant_mismatch', 'category_mismatch') else 'warn' }}">
+                    {{ icon('eye', 'violation-icon') }}
+                    <span><span class="flag-label">Receipt check</span> {{ f.message }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endmacro %}
+
+
+{#- The reading itself, so a flag can be checked rather than merely believed -#}
+{% macro reading_summary(reading) %}
+    {% if reading %}
+        <dl class="reading">
+            <div><dt>Read from receipt</dt>
+                <dd>{{ reading.merchant or 'no merchant' }}
+                    &middot; {{ money(reading.total_cents) }}
+                    {%- if reading.receipt_date %} &middot; {{ reading.receipt_date }}{% endif %}</dd></div>
+        </dl>
+    {% endif %}
+{% endmacro %}
+
+
+{#- Where the receipt check got to. 'clean' is the only state worth an affirmative tick:
+    a manager needs to know a receipt was actually read, not just that nothing was said. -#}
+{% macro receipt_check_pill(state) %}
+    {%- if state == 'clean' -%}
+        <span class="badge tone-good"><span class="badge-dot"></span>receipt checked</span>
+    {%- elif state == 'pending' -%}
+        <span class="badge tone-neutral" data-check-pending><span class="badge-dot"></span>checking receipt</span>
+    {%- elif state == 'failed' -%}
+        <span class="badge tone-warn"><span class="badge-dot"></span>check unavailable</span>
+    {%- endif -%}
+{% endmacro %}
+
+
 {% macro category_chip(name) %}
     <span class="chip">{{ name }}</span>
 {% endmacro %}
@@ -149,22 +192,25 @@
         <a class="receipt" href="/receipts/{{ expense.expense_id }}" target="_blank"
            rel="noopener noreferrer" title="{{ expense.receipt_filename }}">
             {% if expense.receipt_mime == 'application/pdf' %}
-                <span class="receipt-file">{{ icon('receipt') }}<span>PDF receipt</span></span>
+                <span class="receipt-file">{{ icon('receipt') }}<span>PDF receipt or invoice</span></span>
             {% else %}
                 <img src="/receipts/{{ expense.expense_id }}" alt="Receipt for expense {{ expense.expense_id }}" loading="lazy">
             {% endif %}
             <span class="receipt-open">Open full size</span>
         </a>
     {% else %}
-        <p class="receipt-missing">{{ icon('receipt', 'violation-icon') }}<span>No receipt attached</span></p>
+        <p class="receipt-missing">{{ icon('receipt', 'violation-icon') }}<span>No receipt or invoice attached</span></p>
     {% endif %}
 {% endmacro %}
 
 
-{% macro nav_link(href, label, name, active) %}
+{% macro nav_link(href, label, name, active, count=0) %}
     <a href="{{ href }}" class="nav-link{% if active %} is-active{% endif %}"
        {% if active %}aria-current="page"{% endif %}>
         {{ icon(name, 'nav-icon') }}<span>{{ label }}</span>
+        {%- if count %}
+            <span class="nav-count" aria-label="{{ count }} waiting">{{ count }}</span>
+        {%- endif %}
     </a>
 {% endmacro %}
 
@@ -215,6 +261,8 @@
             <ellipse cx="15" cy="14" rx="5.5" ry="2.5"/><path d="M9.5 14v3.5c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5V14"/>
         {%- elif name == 'exchange' -%}
             <path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>
+        {%- elif name == 'eye' -%}
+            <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.8"/>
         {%- elif name == 'sparkle' -%}
             <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>
         {%- endif -%}
