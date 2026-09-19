@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "WebFetch(domain:api.nessieisreal.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.reimaginebanking.com)",
+      "Bash(.venv/bin/python db/seed.py --reset --mode mock)",
+      "PowerShell(& \".venv\\\\bin\\\\python.exe\" db/seed.py --reset --mode mock)",
+      "Bash(python db/seed.py --reset --mode mock)",
+      "Bash(python db/seed.py --mode mock)",
+      "Bash(python -m ruff check config.py db/ nessie/)",
+      "Bash(python -m ruff format --check config.py db/ nessie/)",
+      "Bash(python app.py)",
+      "Bash(python db/init_db.py)",
+      "Bash(head -c 200)",
+      "Bash(cd /tmp)",
+      "Bash(python \"C:/Users/westo/Documents/VT Work/VTHacks/vthacks/db/init_db.py\")"
+    ]
+  }
+}

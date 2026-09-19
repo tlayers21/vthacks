@@ -1,8 +1,15 @@
 import sqlite3
 from pathlib import Path
 import os
+import sys
 
-DB_PATH = Path("app.db")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from config import settings  # noqa: E402
+
+# Anchored to the repo root, not the working directory -- otherwise running this from
+# another folder silently creates a second app.db that nothing else reads.
+DB_PATH = settings.db_path
 SQL_DIR = Path(__file__).parent
 
 def init_db(path=DB_PATH):
