@@ -15,11 +15,17 @@
       "Bash(python db/init_db.py)",
       "Bash(head -c 200)",
       "Bash(cd /tmp)",
-      "Bash(python \"C:/Users/westo/Documents/VT Work/VTHacks/vthacks/db/init_db.py\")"
+      "Bash(python \"C:/Users/westo/Documents/VT Work/VTHacks/vthacks/db/init_db.py\")",
+      "Bash(sqlite3 ../app.db \".tables\")",
+      "Bash(grep -rn '\"/expenses\\\\|/policies/preview\\\\|fetch\\(\"/expenses\\\\|action=\"/expenses\\\\|/expenses/${' src/templates/ tests/)",
+      "Bash(uv run *)",
+      "Bash(curl -s -o /dev/null -w \"startup: %{http_code}\\\\n\" http://127.0.0.1:5000/)",
+      "Bash(echo \"--- exit $? ---\")",
+      "Bash(sort -k2)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "context7"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

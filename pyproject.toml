@@ -16,3 +16,8 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.8",
 ]
+
+[tool.pytest.ini_options]
+# src/ is the import root -- every module does `from config import settings`
+pythonpath = ["src"]
+testpaths = ["tests"]

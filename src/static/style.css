@@ -1,3 +1,272 @@
+/* Layered on top of simple.css: tokens, then the few components the policy UI needs.
+   Dark mode follows the OS -- there is no theme toggle to keep in sync. */
+
+:root {
+    --brand: #7a1d2b;
+    --brand-ink: #fff;
+
+    --ok: #0f7b42;
+    --ok-bg: #e6f4ec;
+    --warn: #8a5a00;
+    --warn-bg: #fdf3dd;
+    --bad: #a5231f;
+    --bad-bg: #fbe9e8;
+    --muted-ink: #5b6472;
+
+    --card-bg: #fff;
+    --card-line: #e3e6ea;
+    --track: #e9ecf0;
+
+    --accent: var(--brand);
+    --accent-bg: #fbfbfc;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --brand: #c9566a;
+        --ok: #5fd39a;
+        --ok-bg: #12301f;
+        --warn: #e3b04b;
+        --warn-bg: #33270c;
+        --bad: #f0857f;
+        --bad-bg: #351715;
+        --muted-ink: #9aa4b2;
+
+        --card-bg: #1b1f24;
+        --card-line: #2c323a;
+        --track: #2c323a;
+        --accent-bg: #15181c;
+    }
+}
+
 body {
-    background-color: maroon;
+    max-width: 68rem;
+}
+
+/* -- top bar ------------------------------------------------------------ */
+
+header nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+}
+
+.brand {
+    font-weight: 700;
+    color: var(--brand);
+    margin-right: auto;
+    font-size: 1.1rem;
+}
+
+.switcher {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+}
+
+.switcher select {
+    margin: 0;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.85rem;
+    width: auto;
+}
+
+.switcher label {
+    font-size: 0.8rem;
+    color: var(--muted-ink);
+    margin: 0;
+}
+
+/* -- cards and layout --------------------------------------------------- */
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1rem;
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-line);
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+}
+
+.card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+}
+
+.split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+@media (max-width: 55rem) {
+    .split {
+        grid-template-columns: 1fr;
+    }
+}
+
+.muted {
+    color: var(--muted-ink);
+    font-size: 0.85rem;
+}
+
+.amount {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* -- badges ------------------------------------------------------------- */
+
+.badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+.badge-auto_approved,
+.badge-paid,
+.badge-approved {
+    background: var(--ok-bg);
+    color: var(--ok);
+}
+
+.badge-needs_approval {
+    background: var(--warn-bg);
+    color: var(--warn);
+}
+
+.badge-blocked,
+.badge-rejected,
+.badge-payout_failed {
+    background: var(--bad-bg);
+    color: var(--bad);
+}
+
+/* -- violations --------------------------------------------------------- */
+
+.violations {
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.violations li {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.55rem;
+    border-radius: 6px;
+    border-left: 3px solid transparent;
+}
+
+.violations li.block {
+    background: var(--bad-bg);
+    border-left-color: var(--bad);
+    color: var(--bad);
+}
+
+.violations li.warn {
+    background: var(--warn-bg);
+    border-left-color: var(--warn);
+    color: var(--warn);
+}
+
+/* -- budget bars -------------------------------------------------------- */
+
+.bar {
+    height: 0.55rem;
+    background: var(--track);
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 0.35rem 0 0.25rem;
+}
+
+.bar span {
+    display: block;
+    height: 100%;
+    background: var(--ok);
+    border-radius: 999px;
+}
+
+.bar.over span {
+    background: var(--bad);
+}
+
+.bar.near span {
+    background: var(--warn);
+}
+
+/* -- the live preview on the submit form -------------------------------- */
+
+#preview {
+    border: 1px solid var(--card-line);
+    border-left-width: 4px;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    background: var(--card-bg);
+    transition: border-color 120ms ease;
+}
+
+#preview.auto_approved {
+    border-left-color: var(--ok);
+}
+
+#preview.needs_approval {
+    border-left-color: var(--warn);
+}
+
+#preview.blocked {
+    border-left-color: var(--bad);
+}
+
+#preview .headline {
+    font-weight: 650;
+    margin: 0;
+}
+
+/* -- tables ------------------------------------------------------------- */
+
+table {
+    width: 100%;
+}
+
+td,
+th {
+    vertical-align: top;
+}
+
+.empty {
+    text-align: center;
+    color: var(--muted-ink);
+    padding: 2rem 1rem;
+    border: 1px dashed var(--card-line);
+    border-radius: 10px;
+}
+
+form.inline {
+    display: inline;
+}
+
+button.small {
+    padding: 0.25rem 0.7rem;
+    font-size: 0.8rem;
+    margin: 0 0.15rem 0 0;
+}
+
+button.ghost {
+    background: transparent;
+    color: var(--bad);
+    border: 1px solid currentColor;
 }

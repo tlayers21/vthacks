@@ -125,3 +125,53 @@ INSERT INTO budget_requests (request_id, customer_id, amount_cents, status) VALU
     (2, '956eed2ecefb9dcafff1c571',  750000, 'Pending'),   -- Engineering,  $7,500
     (3, '2c15cdac1210cee43aafc02a', 1200000, 'Approved'),  -- Sales,       $12,000
     (4, 'ab4e1e4d02b9dd22940571cd',  500000, 'Rejected');  -- Operations,   $5,000
+
+-- ---------------------------------------------------------------------------
+-- 7. Expenses -- one per policy outcome, so every branch of the engine has a row to show.
+--
+-- submitted_at is deliberately omitted so it defaults to CURRENT_TIMESTAMP. The budget check
+-- only counts the current month, so a hardcoded date would make Marketing's over-budget demo
+-- quietly stop working on the first of next month.
+--
+-- Every row's amount must stay consistent with the rule that would have produced its
+-- policy_decision (see policy/rules.py). tests/test_seed_consistency.py enforces that.
+-- ---------------------------------------------------------------------------
+INSERT INTO expenses (expense_id, customer_id, department_id, amount_cents, category,
+                      merchant, description, status, policy_decision) VALUES
+    -- Under Engineering's $1,000 software auto-approve limit: paid with no human involved
+    (1, '6ca50b885e4037e80db44533', 1,    8900, 'software', 'Figma',
+        'Design seat renewal', 'paid', 'auto_approved'),
+    -- The planted team dinner (spec 11): over the $100 client-meals auto-approve limit,
+    -- under the $500 cap
+    (2, '418d13ad70fa7ea3d5e7ac44', 3,   18000, 'client meals', 'Olive Garden',
+        'Team dinner after the Q3 close', 'needs_approval', 'needs_approval'),
+    -- Over the $5,000 equipment cap, so the engine refused it outright
+    (3, 'ad3d81b993865c367d7a3276', 4,  620000, 'equipment', 'Apple',
+        'Workstation refresh', 'rejected', 'blocked'),
+    -- Rows 4-6 put Marketing at $50,400 against a $45,000 budget: 112% (spec 11).
+    -- Each sits under Marketing's $25,000 cap, so only the budget rule escalates the next one.
+    (4, '77eae678aa54d96d23014d38', 2, 1800000, 'marketing', 'Meta Ads',
+        'Q3 retargeting campaign', 'paid', 'needs_approval'),
+    (5, '25ee9a33b129edbe3a53de6e', 2, 1640000, 'marketing', 'Google Ads',
+        'Search campaign, product launch', 'approved', 'needs_approval'),
+    (6, '77eae678aa54d96d23014d38', 2, 1600000, 'marketing', 'LinkedIn Ads',
+        'Recruiting campaign', 'needs_approval', 'needs_approval'),
+    -- Auto-approved but the transfer failed, so retry-payout has something to act on
+    (7, '34b149705a405d7a551ba57b', 3,   42000, 'travel', 'Delta',
+        'Client site visit, ATL-SFO', 'payout_failed', 'auto_approved');
+
+INSERT INTO expense_violations (violation_id, expense_id, rule, severity, message) VALUES
+    (1, 2, 'approval_threshold', 'warn',
+        '$180.00 is over the $100.00 auto-approve limit for client meals'),
+    (2, 3, 'per_expense_cap', 'block',
+        '$6,200.00 is over the $5,000.00 limit for equipment'),
+    (3, 3, 'approval_threshold', 'warn',
+        '$6,200.00 is over the $1,000.00 auto-approve limit for equipment'),
+    (4, 4, 'approval_threshold', 'warn',
+        '$18,000.00 is over the $2,500.00 auto-approve limit for marketing'),
+    (5, 5, 'approval_threshold', 'warn',
+        '$16,400.00 is over the $2,500.00 auto-approve limit for marketing'),
+    (6, 6, 'department_budget', 'warn',
+        '$16,000.00 exceeds the $10,600.00 left of this month''s $45,000.00 budget'),
+    (7, 6, 'approval_threshold', 'warn',
+        '$16,000.00 is over the $2,500.00 auto-approve limit for marketing');

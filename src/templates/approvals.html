@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_macros.html" import money, badge, violation_list %}
+{% block title %}Approvals{% endblock %}
+{% block content %}
+    <h1>Approval queue</h1>
+    <p class="muted">
+        Everything the policy engine routed to you, with the rules that sent it here.
+    </p>
+
+    {% if not expenses %}
+        <p class="empty">Nothing waiting on you.</p>
+    {% else %}
+        <div class="cards">
+            {% for expense in expenses %}
+                <article class="card">
+                    <h3>
+                        <span class="amount">{{ money(expense.amount_cents) }}</span>
+                        &middot; {{ expense.merchant or expense.category }}
+                    </h3>
+                    <p class="muted">
+                        {{ expense.submitter_name }} &middot; {{ expense.department_name }}
+                        &middot; {{ expense.category }}
+                    </p>
+                    {% if expense.description %}<p>{{ expense.description }}</p>{% endif %}
+
+                    {{ violation_list(violations.get(expense.expense_id, [])) }}
+
+                    <p style="margin-top:0.9rem">
+                        <button class="small" data-decide="{{ expense.expense_id }}"
+                                data-approve="true">Approve &amp; pay</button>
+                        <button class="small ghost" data-decide="{{ expense.expense_id }}"
+                                data-approve="false">Reject</button>
+                    </p>
+                </article>
+            {% endfor %}
+        </div>
+
+        <script>
+            document.querySelectorAll("[data-decide]").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    button.disabled = true;
+                    await fetch(`/expenses/${button.dataset.decide}/decision`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ approve: button.dataset.approve === "true" }),
+                    });
+                    location.reload();
+                });
+            });
+        </script>
+    {% endif %}
+{% endblock %}

@@ -10,6 +10,14 @@ Current stage: early scaffold. Backend is Flask on SQLite, `src/` is the import 
 layered backend, React/Vite frontend, DSPy/LangGraph LLM layer) is described in `docs/spec.md`
 but not yet built — check that file before assuming a module exists.
 
+Built so far: the **policy engine** (`src/policy/`, spec §7.1) and the expense path around it —
+`src/db/expenses.py`, `src/services/`, JSON routes under `/api` in `src/api/routes/`, and
+server-rendered Jinja pages. Splits are still out of scope. Rules are code, not rows:
+`src/policy/rules.py` holds them, so changing a limit is a deploy. The engine is a pure
+function — keep SQL, Flask, and Nessie out of `src/policy/`.
+
+Money is always INTEGER cents with a `_cents` suffix, never DECIMAL/REAL.
+
 ## Build
 
 - Install deps: `uv sync`

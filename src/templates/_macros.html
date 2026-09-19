@@ -1,0 +1,25 @@
+{% macro money(cents) %}${{ '{:,.2f}'.format((cents or 0) / 100) }}{% endmacro %}
+
+{% macro badge(value) %}
+    <span class="badge badge-{{ value }}">{{ value.replace('_', ' ') }}</span>
+{% endmacro %}
+
+{% macro violation_list(items) %}
+    {% if items %}
+        <ul class="violations">
+            {% for v in items %}
+                <li class="{{ v.severity }}">{{ v.message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endmacro %}
+
+{% macro budget_bar(committed, budget) %}
+    {% set pct = (committed / budget * 100) if budget else 0 %}
+    <div class="bar {% if pct > 100 %}over{% elif pct > 85 %}near{% endif %}">
+        <span style="width: {{ [pct, 100] | min }}%"></span>
+    </div>
+    <p class="muted">
+        {{ money(committed) }} of {{ money(budget) }} &middot; {{ '{:.0f}'.format(pct) }}%
+    </p>
+{% endmacro %}

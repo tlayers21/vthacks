@@ -22,15 +22,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings  # noqa: E402
 from db.connect import connect, transaction  # noqa: E402
+from db.funding import opening_balances  # noqa: E402
 from nessie import get_nessie  # noqa: E402
 
 SQL_DIR = Path(__file__).parent
 SCHEMA = SQL_DIR / "schema.sql"
 SEED = SQL_DIR / "seed.sql"
-
-# The corporate account funds the department accounts, so it starts with enough to cover
-# every department's monthly budget several times over.
-CORPORATE_FUNDING_MULTIPLE = 3
 
 
 def load_reference_org() -> dict:
@@ -45,7 +42,13 @@ def load_reference_org() -> dict:
         "customers": [dict(r) for r in mem.execute("SELECT * FROM customers")],
         "accounts": [dict(r) for r in mem.execute("SELECT * FROM accounts")],
         "departments": [dict(r) for r in mem.execute("SELECT * FROM departments")],
-        "budget_requests": [dict(r) for r in mem.execute("SELECT * FROM budget_requests")],
+        "budget_requests": [
+            dict(r) for r in mem.execute("SELECT * FROM budget_requests")
+        ],
+        "expenses": [dict(r) for r in mem.execute("SELECT * FROM expenses")],
+        "expense_violations": [
+            dict(r) for r in mem.execute("SELECT * FROM expense_violations")
+        ],
     }
     mem.close()
     return org
@@ -58,29 +61,8 @@ def split_name(full_name: str) -> tuple[str, str]:
 
 def opening_balance(account_id: str, org: dict) -> int:
     """Department accounts open at their monthly budget; corporate covers them all."""
-    by_account = {d["account_id"]: d for d in org["departments"]}
-    if account_id in by_account:
-        return by_account[account_id]["monthly_budget_cents"]
-
-    total_budgets = sum(d["monthly_budget_cents"] for d in org["departments"])
-    corporate_account = _corporate_account_id(org)
-    if account_id == corporate_account:
-        return total_budgets * CORPORATE_FUNDING_MULTIPLE
-    return 0  # personal accounts start empty; reimbursements fund them
-
-
-def _corporate_account_id(org: dict) -> str | None:
-    """The account whose owner is the corporation itself (not a department, not a person)."""
-    department_accounts = {d["account_id"] for d in org["departments"]}
-    owners = {c["nessie_id"]: c for c in org["customers"]}
-    for account in org["accounts"]:
-        if account["nessie_id"] in department_accounts:
-            continue
-        owner = owners[account["customer_id"]]
-        if owner["role"] == "Finance" and owner["department_id"] is None:
-            if "Corporation" in owner["name"]:
-                return account["nessie_id"]
-    return None
+    balances = opening_balances(org["accounts"], org["departments"], org["customers"])
+    return balances[account_id]
 
 
 def seed(mode: str | None = None, reset: bool = False) -> None:
@@ -168,6 +150,42 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                 ),
             )
 
+        # department_id and expense_id stay verbatim: department ids are explicit integers that
+        # are never remapped, and expense_violations references expense_id.
+        # submitted_at is left to default so seeded rows always land in the current month.
+        for expense in org["expenses"]:
+            conn.execute(
+                "INSERT INTO expenses"
+                " (expense_id, customer_id, department_id, amount_cents, category, merchant,"
+                "  description, status, policy_decision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    expense["expense_id"],
+                    customer_ids[expense["customer_id"]],
+                    expense["department_id"],
+                    expense["amount_cents"],
+                    expense["category"],
+                    expense["merchant"],
+                    expense["description"],
+                    expense["status"],
+                    expense["policy_decision"],
+                ),
+            )
+
+        for violation in org["expense_violations"]:
+            conn.execute(
+                "INSERT INTO expense_violations"
+                " (violation_id, expense_id, rule, severity, message) VALUES (?, ?, ?, ?, ?)",
+                (
+                    violation["violation_id"],
+                    violation["expense_id"],
+                    violation["rule"],
+                    violation["severity"],
+                    violation["message"],
+                ),
+            )
+
+    _replay_payouts(conn, org, nessie, customer_ids, account_ids)
+
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise RuntimeError(f"foreign key violations after seeding: {violations}")
@@ -176,9 +194,42 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
         f"seeded via nessie ({mode or settings.nessie_mode}): "
         f"{len(org['customers'])} customers, {len(org['accounts'])} accounts, "
         f"{len(org['departments'])} departments, "
-        f"{len(org['budget_requests'])} budget requests -> {settings.db_path}"
+        f"{len(org['budget_requests'])} budget requests, "
+        f"{len(org['expenses'])} expenses, "
+        f"{len(org['expense_violations'])} violations -> {settings.db_path}"
     )
     conn.close()
+
+
+def _replay_payouts(
+    conn, org: dict, nessie, customer_ids: dict, account_ids: dict
+) -> None:
+    """Move the money behind every seeded `paid` expense.
+
+    Without this a paid row would carry a transfer id Nessie never issued, and both the retry
+    guard and the transfer log would be lying about money that never moved.
+    """
+    account_by_customer = {a["customer_id"]: a["nessie_id"] for a in org["accounts"]}
+    department_accounts = {
+        d["department_id"]: d["account_id"] for d in org["departments"]
+    }
+
+    with transaction(conn):
+        for expense in org["expenses"]:
+            if expense["status"] != "paid":
+                continue
+            payer = account_ids[department_accounts[expense["department_id"]]]
+            payee = account_ids[account_by_customer[expense["customer_id"]]]
+            transfer = nessie.create_transfer(
+                payer_id=payer,
+                payee_id=payee,
+                amount_cents=expense["amount_cents"],
+                description=f"expense {expense['expense_id']}",
+            )
+            conn.execute(
+                "UPDATE expenses SET nessie_transfer_id = ? WHERE expense_id = ?",
+                (transfer["id"], expense["expense_id"]),
+            )
 
 
 def main() -> None:

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_macros.html" import money %}
+{% block title %}Policies{% endblock %}
+{% block content %}
+    <h1>Spend policy</h1>
+    <p class="muted">
+        Rules are defined in code (<code>policy/rules.py</code>), so changing a limit is a
+        deploy rather than an edit here. Department rules fall back to the org-wide default.
+    </p>
+
+    <form method="get" action="/policies">
+        <label for="department_id">Department</label>
+        <select id="department_id" name="department_id" onchange="this.form.submit()">
+            {% for department in departments %}
+                <option value="{{ department.department_id }}"
+                        {% if department.department_id == department_id %}selected{% endif %}>
+                    {{ department.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th class="amount">Auto-approves under</th>
+                <th class="amount">Blocked over</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for category, rule in rules.items() %}
+                <tr>
+                    <td>{{ category }}</td>
+                    <td class="amount">{{ money(rule.auto_approve_limit_cents) }}</td>
+                    <td class="amount">{{ money(rule.per_expense_limit_cents) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p class="muted">
+        Anything between the two limits goes to a manager. An expense that would push the
+        department past its monthly budget also goes to a manager &mdash; it is never blocked
+        outright.
+    </p>
+{% endblock %}

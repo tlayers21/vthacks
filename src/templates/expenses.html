@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import money, badge, violation_list %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+    <h1>{{ title }}</h1>
+
+    {% if not expenses %}
+        <p class="empty">Nothing here yet.</p>
+    {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Merchant</th>
+                    <th>Category</th>
+                    <th class="amount">Amount</th>
+                    <th>Status</th>
+                    <th>Policy</th>
+                    {% if actor.role != 'Employee' %}<th>Submitted by</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for expense in expenses %}
+                    <tr {% if request.args.get('submitted') == expense.expense_id | string %}
+                            style="outline:2px solid var(--brand)"{% endif %}>
+                        <td>
+                            {{ expense.merchant or '--' }}
+                            {% if expense.description %}
+                                <br><span class="muted">{{ expense.description }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ expense.category }}</td>
+                        <td class="amount">{{ money(expense.amount_cents) }}</td>
+                        <td>
+                            {{ badge(expense.status) }}
+                            {% if expense.status == 'payout_failed' %}
+                                <form class="inline" method="post"
+                                      action="/api/expenses/{{ expense.expense_id }}/retry-payout"
+                                      onsubmit="event.preventDefault();
+                                                fetch(this.action, {method:'POST'})
+                                                    .then(() => location.reload());">
+                                    <button class="small" type="submit">Retry</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ badge(expense.policy_decision) }}
+                            {{ violation_list(violations.get(expense.expense_id, [])) }}
+                        </td>
+                        {% if actor.role != 'Employee' %}
+                            <td>
+                                {{ expense.submitter_name }}
+                                <br><span class="muted">{{ expense.department_name }}</span>
+                            </td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endblock %}

@@ -83,7 +83,9 @@ class NessieClient:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 raw = resp.read().decode()
         except urllib.error.HTTPError as exc:
-            raise NessieError(exc.code, exc.read().decode(errors="replace"), url) from exc
+            raise NessieError(
+                exc.code, exc.read().decode(errors="replace"), url
+            ) from exc
         except urllib.error.URLError as exc:
             raise NessieError(0, f"connection failed: {exc.reason}", url) from exc
 

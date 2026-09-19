@@ -1,22 +1,45 @@
 {% extends "base.html" %}
+{% from "_macros.html" import money, budget_bar %}
+{% block title %}Finance{% endblock %}
 {% block content %}
-    <h1>Finance Page</h1>
-    <p>Welcome to the finance section of our application.</p>
+    <h1>Department budgets</h1>
+    <p class="muted">
+        Committed spend is everything this month that has not been rejected.
+    </p>
+
+    <div class="cards">
+        {% for department in departments %}
+            <article class="card">
+                <h3>{{ department.name }}</h3>
+                {{ budget_bar(department.committed_cents, department.monthly_budget_cents) }}
+                <p class="muted">
+                    {% set left = department.monthly_budget_cents - department.committed_cents %}
+                    {% if left < 0 %}
+                        {{ money(-left) }} over budget
+                    {% else %}
+                        {{ money(left) }} remaining
+                    {% endif %}
+                </p>
+            </article>
+        {% endfor %}
+    </div>
+
+    <h2>People</h2>
     <table>
         <thead>
             <tr>
                 <th>Name</th>
                 <th>Role</th>
-                <th>Department Name</th>
+                <th>Department</th>
             </tr>
         </thead>
         <tbody>
             {% for customer in customers %}
-            <tr>
-                <td>{{ customer.customer_name }}</td>
-                <td>{{ customer.role }}</td>
-                <td>{{ customer.department_name }}</td>
-            </tr>
+                <tr>
+                    <td>{{ customer.customer_name }}</td>
+                    <td>{{ customer.role }}</td>
+                    <td>{{ customer.department_name }}</td>
+                </tr>
             {% endfor %}
         </tbody>
     </table>

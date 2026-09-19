@@ -1,12 +1,45 @@
-<html>
+<!doctype html>
+<html lang="en">
     <head>
-        <title>{% block title %}{% endblock %}</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{% block title %}Spend control{% endblock %}</title>
         <link rel="stylesheet" href="https://cdn.simplecss.org/simple.css">
         <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
         {% block head %}{% endblock %}
     </head>
     <body>
         <header>
+            <nav>
+                <span class="brand">Acme spend</span>
+                {% if actor %}
+                    {% if actor.role == 'Employee' %}
+                        <a href="/expenses/new">New expense</a>
+                        <a href="/expenses/mine">My expenses</a>
+                    {% elif actor.role == 'Manager' %}
+                        <a href="/approvals">Approvals</a>
+                        <a href="/expenses/all">Team spend</a>
+                        <a href="/expenses/new">New expense</a>
+                    {% else %}
+                        <a href="/finance">Overview</a>
+                        <a href="/expenses/all">All expenses</a>
+                    {% endif %}
+                    <a href="/policies">Policies</a>
+                {% endif %}
+
+                <form class="switcher" method="post" action="/auth/switch">
+                    <label for="user_id">Viewing as</label>
+                    <select id="user_id" name="user_id" onchange="this.form.submit()">
+                        {% for user in switchable_users %}
+                            <option value="{{ user.nessie_id }}"
+                                    {% if actor and user.nessie_id == actor.nessie_id %}selected{% endif %}>
+                                {{ user.name }} &middot; {{ user.role }}{% if user.department_name %} ({{ user.department_name }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                </form>
+            </nav>
         </header>
         <main>
             {% block content %}{% endblock %}

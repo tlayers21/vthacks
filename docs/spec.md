@@ -4,7 +4,7 @@ A company transaction-management app. Departments get budgets. Employees submit 
 
 **Nessie (Capital One's mock bank API) moves the money. Our own database stores everything else.**
 
-Not included: inter-company invoices, real authentication (a role switcher is used), native mobile, spending policies/limits, split payments.
+Not included: inter-company invoices, real authentication (a role switcher is used), native mobile, split payments.
 
 ## 1. Roles
 
@@ -105,16 +105,20 @@ vthacks/
 
 - **users:** id, name, role, department_id, nessie_customer_id, nessie_account_id
 - **departments:** id, name, monthly_budget, nessie_account_id
-- **expenses:** id, user_id, department_id, amount, merchant, description, expense_date, category, category_source (user|llm), llm_category, llm_confidence, flags (json), status, receipt_path, receipt_hash, receipt_data (json), approver_id, decision_comment, decided_at, nessie_transfer_id
+- **expenses:** id, user_id, department_id, amount, merchant, description, expense_date, category, category_source (user|llm), llm_category, llm_confidence, flags (json), status, policy_decision, receipt_path, receipt_hash, receipt_data (json), approver_id, decision_comment, decided_at, nessie_transfer_id
+- **expense_violations:** id, expense_id, rule, severity, message
 - **budget_requests:** id, department_id, requested_by, category, amount, justification, status, decided_by, decision_comment, nessie_transfer_id
 - **transfers:** id, kind (allocation|reimbursement), from_account, to_account, amount, nessie_id, ref_type, ref_id, status
 - **notifications:** id, user_id, message, link, read
 - **audit_log:** id, actor_id, action, entity, entity_id, details (json), ts
 
-Expense statuses: `needs_approval`, `approved`, `rejected`, `paid`, `payout_failed`. There's no
-policy engine, so every expense goes to `needs_approval` and waits on a manager decision;
-`category` is informational (set by the employee or suggested by the LLM tagger), not
-enforced against any limit.
+Expense statuses: `needs_approval`, `approved`, `rejected`, `paid`, `payout_failed`. Categories
+are a fixed enum: travel, food, client meals, software, equipment, marketing, training, office
+supplies, shipping, other.
+
+`status` and `policy_decision` are separate on purpose. `status` is the lifecycle a manager can
+still move; `policy_decision` records what the engine said at submission and never changes.
+Without both you cannot tell a policy block from a manager rejection.
 
 ## 6. Nessie integration
 
@@ -125,7 +129,61 @@ enforced against any limit.
 
 ## 7. Backend logic
 
-### 7.1 Flags (`services/expense_flags.py`)
+### 7.1 Policy engine (`policy/`)
+
+Decides what happens to an expense the moment it is submitted: pay it out, route it to a
+manager, or refuse it. Pure — no SQL, no Flask, no Nessie — so the same call backs both
+`POST /api/expenses` and the live preview the submit form runs while you type.
+
+Rules are a typed constant in `policy/rules.py`, resolved most-specific-first:
+`(department, category)` → `(org, category)` → a catch-all fallback, so lookup is total.
+
+```python
+def evaluate_expense(expense, budget, rules=None) -> PolicyResult
+```
+
+Every rule runs; none short-circuit. The submitter sees every reason at once.
+
+| Rule | Fires when | Severity |
+|---|---|---|
+| `per_expense_cap` | amount over the category's per-expense limit | `block` |
+| `department_budget` | committed + amount over the month's budget | `warn` |
+| `approval_threshold` | amount over the category's auto-approve limit | `warn` |
+
+The decision is the worst severity present: any `block` → `blocked`; else any `warn` →
+`needs_approval`; else `auto_approved`. Violations are persisted to `expense_violations` and
+shown to the approver.
+
+**Assumptions.** None of these are derivable from the code, and several differ from how a
+policy engine is usually built:
+
+1. Rules live in a Python module, so finance cannot change a limit without a deploy.
+   `RuleSource` in `policy/rules.py` is the seam where a database-backed source drops in.
+2. Going over budget **escalates to `needs_approval`, never blocks**. Section 11 plants
+   Marketing at 112% as an accepted overrun, so blocking would contradict the seed.
+3. Committed spend counts every status except `rejected` — wider than "approved and paid",
+   because a pending approval is exposure and `payout_failed` money is still owed.
+4. All comparisons are strictly greater-than: an expense exactly at a limit passes.
+5. Blocked expenses are still persisted, and `POST /api/expenses` returns 201 for them. The row
+   exists and the caller needs the violations; a 4xx would imply nothing happened.
+6. `auto_approved` pays out immediately rather than queueing.
+7. Violations are a table, not a JSON column — the approval queue filters on `rule`, and the
+   vocabularies stay CHECK-declared beside every other enum in `schema.sql`.
+8. Receipts are not part of policy. The engine never looks at one; the receipt rules in 7.2
+   stay separate and unbuilt.
+9. Seeded expenses omit `submitted_at` so it defaults to `CURRENT_TIMESTAMP`. The budget check
+   only counts the current month, so a hardcoded date would break the over-budget demo on the
+   1st of every month.
+10. The budget check reads committed spend and then writes, so two concurrent submissions can
+    both squeak under. Acceptable for a single-user demo; `BEGIN IMMEDIATE` in
+    `db/connect.py::transaction` is the fix if it stops being one.
+11. `MockNessie` derives ids from a counter that restarts each process, so a mock started
+    against an already-seeded database would re-mint a transfer id the database holds. Startup
+    reserves the existing ids; the `UNIQUE` constraint on `nessie_transfer_id` is the backstop.
+12. The front end is server-rendered Jinja, not the React/Vite stack in sections 2 and 10 — see
+    section 10.
+
+### 7.2 Flags (`services/expense_flags.py`) — not built
 
 Informational only, shown to the approver; they don't block submission except where noted.
 - Receipt total differs from the entered amount
@@ -135,15 +193,17 @@ Informational only, shown to the approver; they don't block submission except wh
 - Duplicate (same receipt hash, or same merchant, amount, and date)
 - Missing receipt on an expense over $25 (blocks submission)
 
-### 7.2 Reimbursement flow (`services/reimbursement.py`)
+### 7.3 Reimbursement flow (`services/expenses.py`)
 
-1. Employee drops in a receipt. `POST /receipts/parse` extracts merchant, total, date, and items and pre-fills the form.
-2. `POST /expenses/suggest-category` pre-fills the category. The employee confirms or changes it. Choosing "other" requires a note.
-3. `POST /expenses` computes flags and writes the audit log. Status is always `needs_approval` — there's no policy engine to auto-approve or auto-reject.
-4. Manager approves or rejects with an optional comment. Approval triggers a department-to-employee Nessie transfer, then status `paid`. Rejection requires a reason.
-5. The submitter and approver are notified at each step.
+1. Employee drops in a receipt. `POST /receipts/parse` extracts merchant, total, date, and items and pre-fills the form. *(Not built.)*
+2. `POST /expenses/suggest-category` pre-fills the category. The employee confirms or changes it. Choosing "other" requires a note. *(Not built.)*
+3. As the form is filled, `POST /api/policies/preview` shows the decision and any violations before submit.
+4. `POST /api/expenses` runs the policy engine and persists the expense with its violations.
+5. Result: auto-approved (paid immediately), sent to the manager, or blocked with its reasons. A blocked expense is still recorded.
+6. Manager approves or rejects. Approval triggers a department-to-employee Nessie transfer, then status `paid`.
+7. `POST /api/expenses/{id}/retry-payout` retries a `payout_failed` expense. It shares one code path with both approval routes, so the idempotency guard in section 6 covers all three.
 
-### 7.3 Budget requests (`services/budget_requests.py`)
+### 7.4 Budget requests (`services/budget_requests.py`)
 
 A manager submits category, amount, and justification. Finance sees it next to the department's current spend. Approving triggers a corporate-to-department transfer and raises `monthly_budget`. Denying requires a reason.
 
@@ -154,11 +214,12 @@ A manager submits category, amount, and justification. Finance sees it next to t
 ```python
 class TagExpense(dspy.Signature):
     """Categorize a company expense."""
+
     merchant: str = dspy.InputField()
     description: str = dspy.InputField()
     amount: float = dspy.InputField()
     department: str = dspy.InputField()
-    category: Cat = dspy.OutputField()   # Literal of the category enum
+    category: Cat = dspy.OutputField()  # Literal of the category enum
     confidence: float = dspy.OutputField(desc="0 to 1")
 ```
 
@@ -186,13 +247,24 @@ Empty results produce "no matching data," never invented numbers.
 
 Every route checks role and department server-side.
 
+Built so far — JSON lives under `/api` so it cannot collide with a rendered page at the same
+name (`GET /policies` is a page; `GET /api/policies` is the rule set):
+
 ```
-POST /auth/switch                 GET  /me
+POST /auth/switch                 GET  /auth/me           GET  /auth/users
+POST /api/expenses                GET  /api/expenses?scope=mine|dept|all
+GET  /api/expenses/{id}           POST /api/expenses/{id}/decision
+POST /api/expenses/{id}/retry-payout
+GET  /api/policies                POST /api/policies/preview
+GET  /api/policies/budgets
+```
+
+Planned:
+
+```
 GET  /budgets/summary
 POST /receipts/parse
 POST /expenses/suggest-category
-POST /expenses                    GET  /expenses?scope=mine|dept|all
-POST /expenses/{id}/decision      POST /expenses/{id}/retry-payout
 POST /budget-requests             GET  /budget-requests
 POST /budget-requests/{id}/decision
 POST /assistant/ask (SSE)         POST /assistant/confirm
@@ -205,23 +277,28 @@ The OpenAPI schema is the contract. The frontend client is generated from it.
 
 ## 10. Frontend
 
-**Shell:** sidebar per role, top bar with a "Viewing as" user switcher and notification bell, Cmd+K opens the assistant.
+**Built today: server-rendered Jinja, not React.** There is no `package.json` or node toolchain
+in this repo, so a SPA would mean a build pipeline, a dev proxy, and a generated client before a
+single policy decision reached the screen. Templates in `src/templates/`, styling in
+`src/static/style.css` on top of simple.css, dark mode from `prefers-color-scheme`. The React
+stack in section 2 remains the target; nothing below depends on staying with Jinja.
+
+**Shell:** top bar with a "Viewing as" switcher, nav per role.
 
 **Employee**
-- Dashboard: budget bars by category
-- New expense: receipt dropzone, pre-filled form, live flags
-- My expenses: list with status and manager comments
+- New expense: form with a **live policy preview** — the decision badge and its violations
+  update as you type, before you submit
+- My expenses: status and policy badges, violations, retry on a failed payout
 
 **Manager**
-- Approval queue: receipt preview, note, flags, approve and reject with comment
-- Team spend: budget vs. spent by category, department expense table
-- New budget request: category, amount, justification
+- Approval queue: each expense with the violations that routed it there, approve and reject
 
 **Finance**
-- Overview: totals, department comparison, over-budget highlight
-- Department detail
-- Budget requests: justification, Deny and Approve-and-transfer
-- Transfers and audit log
+- Overview: budget vs. committed spend per department, over-budget highlighted
+- Policies: the resolved rule set per department, read-only because rules are code
+
+Still to build: receipt dropzone, budget-request screens, transfers and audit log, the
+assistant panel, and the money-flow animation.
 
 **Assistant panel:** streaming answers, SQL and sources disclosed under each answer, confirmation card for actions, suggested question chips.
 
@@ -233,10 +310,13 @@ The OpenAPI schema is the contract. The frontend client is generated from it.
 
 Seed 4 departments, about 12 users, and realistic merchants (Delta, Figma, Olive Garden, AWS, Staples). Plant:
 - a $180 team dinner that needs approval
-- a receipt whose total doesn't match the form
-- an old receipt
+- a $6,200 workstation the engine blocked on the per-expense cap
+- a $89 Figma renewal that auto-approved and paid
+- a travel expense stuck in `payout_failed`, so retry has something to act on
 - Marketing at 112% of budget with a pending request
-- a duplicate submission
+- a receipt whose total doesn't match the form *(needs the receipt reader)*
+- an old receipt *(needs the receipt reader)*
+- a duplicate submission *(needs flags)*
 
 Keep 3 or 4 sample receipts in `data/sample_receipts/` and cache their parsed results in case the API or wifi fails.
 
@@ -251,7 +331,8 @@ Record a Playwright backup video.
 
 ## 12. Testing
 
-- **Unit:** flags, permissions, SQL guard (DELETE, multiple statements, forbidden tables, `WITH` overrides)
+- **Unit:** policy engine (every rule boundary), rule fallback, flags, permissions, SQL guard (DELETE, multiple statements, forbidden tables, `WITH` overrides)
+- **Seed consistency:** every planted expense stays consistent with the rule that would have produced its `policy_decision`, so the demo cannot quietly start lying
 - **Integration:** full reimbursement flow against mock Nessie
 - **Permissions:** every role against every endpoint and assistant question
 - **Evals (`make eval`):** tagging accuracy before and after optimization, receipt field accuracy, assistant SQL correctness on about 30 questions

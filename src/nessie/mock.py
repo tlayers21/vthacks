@@ -7,6 +7,7 @@ always produces the same ids -- tests can assert on them.
 
 import hashlib
 import itertools
+from collections.abc import Iterable
 
 from .protocol import Account, Customer, Transfer
 
@@ -22,10 +23,25 @@ class MockNessie:
         self._transfers: dict[str, Transfer] = {}
         self._purchases: dict[str, dict] = {}
         self._counters: dict[str, itertools.count] = {}
+        self._reserved: set[str] = set()
 
     def _next_id(self, kind: str) -> str:
         counter = self._counters.setdefault(kind, itertools.count(1))
-        return hashlib.sha1(f"{kind}:{next(counter)}".encode()).hexdigest()[:24]
+        while True:
+            candidate = hashlib.sha1(f"{kind}:{next(counter)}".encode()).hexdigest()[
+                :24
+            ]
+            if candidate not in self._reserved:
+                return candidate
+
+    def reserve_ids(self, ids: Iterable[str]) -> None:
+        """Refuse to re-issue ids that something else already handed out.
+
+        The counter restarts at 1 in every process, so a mock started fresh against a database
+        seeded by an earlier run would otherwise mint a transfer id that database already
+        stores -- and the UNIQUE constraint on expenses.nessie_transfer_id would reject it.
+        """
+        self._reserved.update(i for i in ids if i)
 
     # -- customers ----------------------------------------------------------
 
@@ -60,6 +76,25 @@ class MockNessie:
 
     def get_balance(self, account_id: str) -> int:
         return self._accounts[account_id]["balance_cents"]
+
+    def seed_account(
+        self, account_id: str, customer_id: str, nickname: str, balance_cents: int
+    ) -> Account:
+        """Register an account that already exists in our database, keeping its id.
+
+        Deliberately not on the Nessie protocol -- the real client cannot choose its own ids.
+        This exists because db/seed.py registers accounts with a mock in its own process and
+        then exits, so the Flask process starts with a mock that has never heard of them and
+        the first payout would KeyError.
+        """
+        account: Account = {
+            "id": account_id,
+            "customer_id": customer_id,
+            "nickname": nickname,
+            "balance_cents": balance_cents,
+        }
+        self._accounts[account_id] = account
+        return account
 
     # -- money movement -----------------------------------------------------
 

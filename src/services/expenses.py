@@ -1,0 +1,131 @@
+"""Submitting an expense, and paying one out.
+
+Orchestration only: the SQL lives in db/expenses.py, the rules in policy/.
+"""
+
+import logging
+import sqlite3
+
+from db import expenses as expense_db
+from db.connect import transaction
+from policy import DECISION_TO_STATUS, ExpenseDraft, PolicyResult, evaluate_expense
+from services.permissions import Forbidden, can_decide, can_submit
+
+log = logging.getLogger(__name__)
+
+
+def submit_expense(
+    conn: sqlite3.Connection,
+    actor: sqlite3.Row,
+    *,
+    amount_cents: int,
+    category: str,
+    merchant: str | None = None,
+    description: str | None = None,
+    nessie=None,
+) -> dict:
+    if not can_submit(actor):
+        raise Forbidden("this account cannot submit expenses")
+
+    draft = ExpenseDraft(
+        customer_id=actor["nessie_id"],
+        department_id=actor["department_id"],
+        amount_cents=amount_cents,
+        category=category,
+        merchant=merchant,
+        description=description,
+    )
+    result = preview_expense(conn, draft)
+    status = DECISION_TO_STATUS[result.decision]
+
+    with transaction(conn):
+        expense_id = expense_db.insert_expense(conn, draft, result, status)
+
+    # Outside the transaction above: never hold a SQLite write lock across a network call.
+    # A blocked expense keeps its row -- the submitter needs to see why it was refused.
+    if result.decision == "auto_approved":
+        status = pay_expense(conn, expense_id, nessie)
+
+    return {
+        "expense_id": expense_id,
+        "status": status,
+        "decision": result.decision,
+        "violations": [v.as_dict() for v in result.violations],
+    }
+
+
+def preview_expense(conn: sqlite3.Connection, draft: ExpenseDraft) -> PolicyResult:
+    """Evaluate without writing anything. Backs the live preview on the submit form."""
+    budget = expense_db.department_budget(conn, draft.department_id)
+    return evaluate_expense(draft, budget)
+
+
+def pay_expense(conn: sqlite3.Connection, expense_id: int, nessie=None) -> str:
+    """Move the money for an approved expense. Safe to call more than once.
+
+    The transfer id is written and committed before the status becomes 'paid', so a crash
+    between the two leaves an approved row that already carries its id -- the guard below then
+    turns the retry into a status flip instead of a second transfer. The UNIQUE constraint on
+    nessie_transfer_id is the backstop if that ever slips.
+    """
+    if nessie is None:
+        from nessie import get_nessie
+
+        nessie = get_nessie()
+
+    expense = expense_db.get_expense(conn, expense_id)
+    if expense is None:
+        raise KeyError(f"no such expense: {expense_id}")
+
+    if expense["nessie_transfer_id"] is not None:
+        if expense["status"] != "paid":
+            with transaction(conn):
+                expense_db.set_status(conn, expense_id, "paid")
+        return "paid"
+
+    payer_id, payee_id = expense_db.payout_accounts(conn, expense_id)
+    try:
+        transfer = nessie.create_transfer(
+            payer_id=payer_id,
+            payee_id=payee_id,
+            amount_cents=expense["amount_cents"],
+            description=f"expense {expense_id}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        # Broad on purpose: InsufficientFunds, an unknown account, and any HTTP failure from the
+        # real client all mean the same thing here. Not re-raised -- the expense was validly
+        # accepted, only the money did not move, and payout_failed is retryable.
+        with transaction(conn):
+            expense_db.set_status(conn, expense_id, "payout_failed")
+        log.warning("payout failed for expense %s: %s", expense_id, exc)
+        return "payout_failed"
+
+    with transaction(conn):
+        expense_db.set_transfer_id(conn, expense_id, transfer["id"])
+        expense_db.set_status(conn, expense_id, "paid")
+    return "paid"
+
+
+def decide_expense(
+    conn: sqlite3.Connection,
+    actor: sqlite3.Row,
+    expense_id: int,
+    approve: bool,
+    nessie=None,
+) -> dict:
+    """A manager's call on an expense the engine routed to them."""
+    expense = expense_db.get_expense(conn, expense_id)
+    if expense is None:
+        raise KeyError(f"no such expense: {expense_id}")
+    if not can_decide(actor, expense):
+        raise Forbidden("not your department")
+    if expense["status"] != "needs_approval":
+        raise Forbidden(f"expense is {expense['status']}, not awaiting a decision")
+
+    status = "approved" if approve else "rejected"
+    with transaction(conn):
+        expense_db.record_decision(conn, expense_id, status, actor["nessie_id"])
+
+    if approve:
+        status = pay_expense(conn, expense_id, nessie)
+    return {"expense_id": expense_id, "status": status}

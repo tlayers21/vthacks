@@ -35,3 +35,51 @@ CREATE TABLE budget_requests (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(nessie_id)
 );
+
+-- status is the lifecycle a manager can still move; policy_decision is the immutable record
+-- of what the engine said at submission. Without both you cannot tell a policy block from a
+-- manager rejection.
+CREATE TABLE expenses (
+    expense_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id TEXT NOT NULL,
+    -- Denormalized from customers: spend is charged to the department that owned it at
+    -- submission time, not to wherever the employee sits today
+    department_id INTEGER NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    category TEXT NOT NULL CHECK (category IN (
+        'travel', 'food', 'client meals', 'software', 'equipment',
+        'marketing', 'training', 'office supplies', 'shipping', 'other'
+    )),
+    merchant VARCHAR(100),
+    description TEXT,
+    status TEXT NOT NULL CHECK (status IN (
+        'needs_approval', 'approved', 'rejected', 'paid', 'payout_failed'
+    )),
+    policy_decision TEXT NOT NULL CHECK (policy_decision IN (
+        'auto_approved', 'needs_approval', 'blocked'
+    )),
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    decided_by TEXT,
+    decided_at TIMESTAMP,
+    -- UNIQUE is the idempotency guard, enforced by the database rather than by remembering to
+    -- check. SQLite allows many NULLs here, so unpaid rows are fine
+    nessie_transfer_id TEXT UNIQUE,
+    FOREIGN KEY (customer_id) REFERENCES customers(nessie_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (decided_by) REFERENCES customers(nessie_id)
+);
+
+CREATE INDEX idx_expenses_dept_month ON expenses (department_id, submitted_at);
+
+-- A table rather than a JSON column so the approval queue can filter on `rule` directly, and so
+-- the rule and severity vocabularies stay CHECK-declared beside every other enum in this file.
+CREATE TABLE expense_violations (
+    violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    expense_id INTEGER NOT NULL,
+    rule TEXT NOT NULL CHECK (rule IN (
+        'per_expense_cap', 'department_budget', 'approval_threshold'
+    )),
+    severity TEXT NOT NULL CHECK (severity IN ('block', 'warn')),
+    message TEXT NOT NULL,
+    FOREIGN KEY (expense_id) REFERENCES expenses(expense_id) ON DELETE CASCADE
+);

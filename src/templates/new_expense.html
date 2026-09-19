@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "_macros.html" import money, budget_bar %}
+{% block title %}New expense{% endblock %}
+{% block content %}
+    <h1>New expense</h1>
+
+    <div class="split">
+        <form id="expense-form">
+            <label for="amount">Amount</label>
+            <input type="number" id="amount" name="amount" step="0.01" min="0.01"
+                   placeholder="0.00" required>
+
+            <label for="category">Category</label>
+            <select id="category" name="category" required>
+                {% for category in categories %}
+                    <option value="{{ category }}">{{ category }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="merchant">Merchant</label>
+            <input type="text" id="merchant" name="merchant" maxlength="100"
+                   placeholder="Figma">
+
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3" maxlength="1000"></textarea>
+
+            <button type="submit">Submit expense</button>
+        </form>
+
+        <aside>
+            <div id="preview">
+                <p class="headline">Enter an amount</p>
+                <p class="muted">Policy is checked before you submit.</p>
+            </div>
+
+            <div class="card" style="margin-top:1rem">
+                <h3>{{ actor.name }}'s department this month</h3>
+                {{ budget_bar(budget.committed_cents, budget.monthly_budget_cents) }}
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const form = document.getElementById("expense-form");
+        const preview = document.getElementById("preview");
+
+        const HEADLINES = {
+            auto_approved: "Auto-approves — paid immediately",
+            needs_approval: "Needs manager approval",
+            blocked: "Blocked by policy",
+        };
+
+        function payload() {
+            const dollars = parseFloat(form.amount.value);
+            if (!dollars || dollars <= 0) return null;
+            return {
+                amount_cents: Math.round(dollars * 100),
+                category: form.category.value,
+                merchant: form.merchant.value || null,
+                description: form.description.value || null,
+            };
+        }
+
+        function render(decision, violations) {
+            preview.className = decision;
+            const items = violations.map(
+                (v) => `<li class="${v.severity}">${v.message}</li>`
+            ).join("");
+            preview.innerHTML =
+                `<p class="headline">${HEADLINES[decision]}</p>` +
+                (items ? `<ul class="violations">${items}</ul>` : "");
+        }
+
+        // Debounced so typing an amount does not fire a request per keystroke
+        let timer;
+        async function refresh() {
+            const body = payload();
+            if (!body) {
+                preview.className = "";
+                preview.innerHTML =
+                    '<p class="headline">Enter an amount</p>' +
+                    '<p class="muted">Policy is checked before you submit.</p>';
+                return;
+            }
+            const response = await fetch("/api/policies/preview", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) return;
+            const result = await response.json();
+            render(result.decision, result.violations);
+        }
+
+        form.addEventListener("input", () => {
+            clearTimeout(timer);
+            timer = setTimeout(refresh, 180);
+        });
+        form.addEventListener("change", refresh);
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const body = payload();
+            if (!body) return;
+            const response = await fetch("/api/expenses", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                render("blocked", [{ severity: "block", message: result.error }]);
+                return;
+            }
+            window.location = "/expenses/mine?submitted=" + result.expense_id;
+        });
+    </script>
+{% endblock %}

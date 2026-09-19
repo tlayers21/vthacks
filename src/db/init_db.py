@@ -12,6 +12,7 @@ from config import settings  # noqa: E402
 DB_PATH = settings.db_path
 SQL_DIR = Path(__file__).parent
 
+
 def init_db(path=DB_PATH):
     if os.path.exists(path):
         os.remove(path)
@@ -24,6 +25,7 @@ def init_db(path=DB_PATH):
         conn.commit()
     finally:
         conn.close()
+
 
 if __name__ == "__main__":
     init_db()

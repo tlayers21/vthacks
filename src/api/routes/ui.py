@@ -1,0 +1,119 @@
+"""The rendered pages.
+
+Server-rendered rather than the spec's React front end: there is no node toolchain in this repo,
+and the policy preview only needs one fetch call to feel live.
+"""
+
+from flask import Blueprint, redirect, render_template, request
+
+from api.deps import current_user, get_conn, switchable_users
+from db import expenses as expense_db
+from policy import CATEGORIES, resolved_rules
+from services.permissions import default_scope, visible_expense_filter
+
+bp = Blueprint("ui", __name__)
+
+
+@bp.app_context_processor
+def inject_user():
+    """Every page needs the switcher and the acting user."""
+    conn = get_conn()
+    return {
+        "actor": current_user(),
+        "switchable_users": switchable_users(conn),
+        "categories": CATEGORIES,
+    }
+
+
+@bp.get("/")
+def home():
+    actor = current_user()
+    if actor is None:
+        return render_template("index.html")
+    if actor["role"] == "Finance":
+        return redirect("/finance")
+    if actor["role"] == "Manager":
+        return redirect("/approvals")
+    return redirect("/expenses/new")
+
+
+@bp.get("/expenses/new")
+def new_expense():
+    actor = current_user()
+    if actor is None:
+        return redirect("/")
+    budget = expense_db.department_budget(get_conn(), actor["department_id"])
+    return render_template("new_expense.html", budget=budget)
+
+
+@bp.get("/expenses/mine")
+def my_expenses():
+    actor = current_user()
+    if actor is None:
+        return redirect("/")
+    return render_template(
+        "expenses.html", **_expense_view(actor, "mine"), title="My expenses"
+    )
+
+
+@bp.get("/approvals")
+def approvals():
+    actor = current_user()
+    if actor is None:
+        return redirect("/")
+    conn = get_conn()
+    filters = visible_expense_filter(actor, default_scope(actor))
+    rows = expense_db.list_expenses(conn, statuses=("needs_approval",), **filters)
+    violations = expense_db.violations_for(conn, [r["expense_id"] for r in rows])
+    return render_template("approvals.html", expenses=rows, violations=violations)
+
+
+@bp.get("/finance")
+def finance():
+    """Department budgets against this month's committed spend."""
+    conn = get_conn()
+    return render_template(
+        "finance.html",
+        departments=expense_db.department_spend_summary(conn),
+        customers=conn.execute(
+            "SELECT c.name AS customer_name, c.role, d.name AS department_name"
+            " FROM customers c JOIN departments d ON c.department_id = d.department_id"
+        ).fetchall(),
+    )
+
+
+@bp.get("/policies")
+def policies_page():
+    actor = current_user()
+    requested = request.args.get("department_id", type=int)
+    department_id = requested or (actor["department_id"] if actor else None) or 1
+    conn = get_conn()
+    departments = conn.execute(
+        "SELECT department_id, name FROM departments ORDER BY name"
+    ).fetchall()
+    return render_template(
+        "policies.html",
+        departments=departments,
+        department_id=department_id,
+        rules=resolved_rules(department_id),
+    )
+
+
+@bp.get("/expenses/all")
+def all_expenses():
+    actor = current_user()
+    if actor is None:
+        return redirect("/")
+    scope = default_scope(actor)
+    return render_template(
+        "expenses.html", **_expense_view(actor, scope), title="All expenses"
+    )
+
+
+def _expense_view(actor, scope: str) -> dict:
+    conn = get_conn()
+    rows = expense_db.list_expenses(conn, **visible_expense_filter(actor, scope))
+    return {
+        "expenses": rows,
+        "violations": expense_db.violations_for(conn, [r["expense_id"] for r in rows]),
+    }
