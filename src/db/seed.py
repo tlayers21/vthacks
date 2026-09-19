@@ -27,6 +27,7 @@ from config import settings  # noqa: E402
 from db.connect import connect, transaction  # noqa: E402
 from db.funding import opening_balances  # noqa: E402
 from nessie import get_nessie  # noqa: E402
+from services.receipts import install_samples  # noqa: E402
 
 SQL_DIR = Path(__file__).parent
 SCHEMA = SQL_DIR / "schema.sql"
@@ -98,6 +99,7 @@ def reclaim_sandbox(nessie, org: dict) -> dict[tuple[str, str], str]:
 
 def seed(mode: str | None = None, reset: bool = False) -> None:
     org = load_reference_org()
+    install_samples()
     nessie = get_nessie(mode)
 
     if reset and settings.db_path.exists():
@@ -195,7 +197,9 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
             conn.execute(
                 "INSERT INTO expenses"
                 " (expense_id, customer_id, department_id, amount_cents, category, merchant,"
-                "  description, status, policy_decision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "  description, status, policy_decision,"
+                "  receipt_path, receipt_filename, receipt_mime, receipt_hash)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     expense["expense_id"],
                     customer_ids[expense["customer_id"]],
@@ -206,6 +210,10 @@ def seed(mode: str | None = None, reset: bool = False) -> None:
                     expense["description"],
                     expense["status"],
                     expense["policy_decision"],
+                    expense["receipt_path"],
+                    expense["receipt_filename"],
+                    expense["receipt_mime"],
+                    expense["receipt_hash"],
                 ),
             )
 

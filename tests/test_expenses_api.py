@@ -1,5 +1,7 @@
 """The submission path, end to end against a mock bank."""
 
+import io
+
 import pytest
 
 from db import expenses as expense_db
@@ -9,8 +11,25 @@ from policy import CATEGORIES
 SMALL_SOFTWARE = {"amount_cents": 8_900, "category": "software", "merchant": "Figma"}
 
 
-def post_expense(client, **overrides):
-    return client.post("/api/expenses", json={**SMALL_SOFTWARE, **overrides})
+# Smallest thing the upload validator accepts as a PNG
+RECEIPT_PNG = bytes.fromhex("89504e470d0a1a0a") + bytes(64)
+
+
+def post_expense(client, attach_receipt=True, **overrides):
+    """Attaches a receipt by default so these tests exercise the rule they mean to.
+
+    Everything here is over the $25 receipt threshold, so without one every submission
+    would come back blocked for a missing receipt rather than for the rule under test.
+    """
+    fields = {**SMALL_SOFTWARE, **overrides}
+    if not attach_receipt:
+        return client.post("/api/expenses", json=fields)
+
+    data = {k: str(v) for k, v in fields.items() if v is not None}
+    data["receipt"] = (io.BytesIO(RECEIPT_PNG), "receipt.png")
+    return client.post(
+        "/api/expenses", data=data, content_type="multipart/form-data"
+    )
 
 
 # -- auto-approve pays out --------------------------------------------------
@@ -331,7 +350,8 @@ def test_employee_cannot_read_another_persons_expense(client, sign_in, db):
 def test_preview_matches_submission_without_writing(client, sign_in, db):
     sign_in("grace")
     before = db.execute("SELECT COUNT(*) AS n FROM expenses").fetchone()["n"]
-    payload = {"amount_cents": 900_000, "category": "equipment"}
+    # has_receipt on both sides, so the comparison is about the equipment cap
+    payload = {"amount_cents": 900_000, "category": "equipment", "has_receipt": True}
 
     preview = client.post("/api/policies/preview", json=payload).get_json()
     after = db.execute("SELECT COUNT(*) AS n FROM expenses").fetchone()["n"]
@@ -339,7 +359,9 @@ def test_preview_matches_submission_without_writing(client, sign_in, db):
     assert preview["decision"] == "blocked"
     assert after == before
 
-    submitted = client.post("/api/expenses", json=payload).get_json()
+    submitted = post_expense(
+        client, amount_cents=900_000, category="equipment", merchant=None
+    ).get_json()
     assert submitted["decision"] == preview["decision"]
     assert [v["rule"] for v in submitted["violations"]] == [
         v["rule"] for v in preview["violations"]

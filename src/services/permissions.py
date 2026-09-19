@@ -43,6 +43,11 @@ def can_decide(actor: sqlite3.Row, expense: sqlite3.Row) -> bool:
     return actor["department_id"] == expense["department_id"]
 
 
+def can_view_expense(actor: sqlite3.Row, expense: sqlite3.Row) -> bool:
+    """Its submitter, or anyone who could decide it. Also gates the receipt file."""
+    return actor["nessie_id"] == expense["customer_id"] or can_decide(actor, expense)
+
+
 def can_submit(actor: sqlite3.Row) -> bool:
     # The corporation and the department customers hold accounts but never submit anything
     return actor["department_id"] is not None

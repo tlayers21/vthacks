@@ -61,6 +61,12 @@ CREATE TABLE expenses (
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     decided_by TEXT,
     decided_at TIMESTAMP,
+    -- Receipt bytes live on disk under settings.receipts_dir; only metadata is stored here.
+    -- receipt_path is derived server-side from the hash, never from the uploaded filename
+    receipt_path TEXT,
+    receipt_filename TEXT,
+    receipt_mime TEXT,
+    receipt_hash TEXT,
     -- UNIQUE is the idempotency guard, enforced by the database rather than by remembering to
     -- check. SQLite allows many NULLs here, so unpaid rows are fine
     nessie_transfer_id TEXT UNIQUE,
@@ -77,7 +83,7 @@ CREATE TABLE expense_violations (
     violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
     expense_id INTEGER NOT NULL,
     rule TEXT NOT NULL CHECK (rule IN (
-        'per_expense_cap', 'department_budget', 'approval_threshold'
+        'per_expense_cap', 'department_budget', 'approval_threshold', 'missing_receipt'
     )),
     severity TEXT NOT NULL CHECK (severity IN ('block', 'warn')),
     message TEXT NOT NULL,

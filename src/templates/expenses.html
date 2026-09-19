@@ -102,6 +102,12 @@
                                     {% if expense.description %}
                                         <span class="mt-0.5 block text-xs text-muted">{{ expense.description }}</span>
                                     {% endif %}
+                                    {% if expense.receipt_path %}
+                                        <a class="receipt-link" href="/receipts/{{ expense.expense_id }}"
+                                           target="_blank" rel="noopener noreferrer">
+                                            {{ icon('receipt', 'violation-icon') }}<span>Receipt</span>
+                                        </a>
+                                    {% endif %}
                                 </td>
                                 <td>{{ category_chip(expense.category) }}</td>
                                 <td class="num font-medium">{{ money(expense.amount_cents) }}</td>

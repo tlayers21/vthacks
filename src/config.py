@@ -36,6 +36,12 @@ class Settings:
     # Where the SQLite file lives.
     db_path = Path(os.environ.get("DB_PATH", REPO_ROOT / "app.db"))
 
+    # Uploaded receipts. Served only through a permission-checked route, never as static
+    # files -- anyone who guessed a hash would otherwise read someone else's receipt.
+    receipts_dir = Path(os.environ.get("RECEIPTS_DIR", REPO_ROOT / "data" / "receipts"))
+    sample_receipts_dir = REPO_ROOT / "data" / "sample_receipts"
+    max_receipt_bytes = int(os.environ.get("MAX_RECEIPT_BYTES", 10 * 1024 * 1024))
+
     # "mock" keeps everything in memory and offline; "real" talks to the Nessie sandbox.
     nessie_mode = os.environ.get("NESSIE_MODE", "mock")
     nessie_api_key = os.environ.get("NESSIE_API_KEY", "")

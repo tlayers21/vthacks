@@ -7,9 +7,10 @@ from api.deps import current_user, get_conn, get_nessie
 from api.schemas import DecisionIn, ExpenseIn
 from db import expenses as expense_db
 from services import expenses as expense_service
+from services import receipts as receipt_service
 from services.permissions import (
     Forbidden,
-    can_decide,
+    can_view_expense,
     default_scope,
     visible_expense_filter,
 )
@@ -19,15 +20,30 @@ bp = Blueprint("expenses", __name__, url_prefix="/api/expenses")
 
 @bp.post("")
 def create_expense():
+    """Accepts multipart (with an optional `receipt` file) or plain JSON."""
     actor = current_user()
     if actor is None:
         return jsonify(error="not signed in"), 401
+
+    if request.files or request.form:
+        fields = dict(request.form)
+    else:
+        fields = request.get_json(silent=True) or {}
     try:
-        payload = ExpenseIn.model_validate(request.get_json(silent=True) or {})
+        payload = ExpenseIn.model_validate(fields)
     except ValidationError as exc:
         return jsonify(
             error="invalid expense", detail=exc.errors(include_url=False)
         ), 400
+
+    # Written to disk before the row so the transaction never spans filesystem I/O
+    upload = request.files.get("receipt")
+    receipt = None
+    if upload is not None and upload.filename:
+        try:
+            receipt = receipt_service.store(upload.filename, upload.read())
+        except receipt_service.RejectedReceipt as exc:
+            return jsonify(error=str(exc)), 400
 
     try:
         result = expense_service.submit_expense(
@@ -37,6 +53,7 @@ def create_expense():
             category=payload.category,
             merchant=payload.merchant,
             description=payload.description,
+            receipt=receipt,
             nessie=get_nessie(),
         )
     except Forbidden as exc:
@@ -102,7 +119,7 @@ def retry_payout(expense_id: int):
     expense = expense_db.get_expense(conn, expense_id)
     if expense is None:
         return jsonify(error="no such expense"), 404
-    if not _may_view(actor, expense):
+    if not can_view_expense(actor, expense):
         return jsonify(error="not yours"), 403
     if expense["status"] != "payout_failed":
         return jsonify(error=f"expense is {expense['status']}, not payout_failed"), 409
@@ -120,11 +137,7 @@ def get_one(expense_id: int):
     expense = expense_db.get_expense(conn, expense_id)
     if expense is None:
         return jsonify(error="no such expense"), 404
-    if not _may_view(actor, expense):
+    if not can_view_expense(actor, expense):
         return jsonify(error="not yours"), 403
     violations = expense_db.violations_for(conn, [expense_id]).get(expense_id, [])
     return jsonify({**dict(expense), "violations": violations})
-
-
-def _may_view(actor, expense) -> bool:
-    return actor["nessie_id"] == expense["customer_id"] or can_decide(actor, expense)

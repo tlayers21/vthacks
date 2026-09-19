@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import money, money_short, violation_list, category_chip, empty_state, icon %}
+{% from "_macros.html" import money, money_short, violation_list, category_chip, empty_state, icon, receipt_preview %}
 {% block title %}Approvals{% endblock %}
 {% block page_title %}Approval queue{% endblock %}
 {% block page_subtitle %}
@@ -50,6 +50,8 @@
                     {% endif %}
 
                     {{ violation_list(violations.get(expense.expense_id, [])) }}
+
+                    {{ receipt_preview(expense) }}
 
                     <div class="mt-auto flex gap-2 pt-4">
                         <button type="button" class="btn btn-good btn-sm grow"

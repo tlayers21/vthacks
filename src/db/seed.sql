@@ -160,6 +160,69 @@ INSERT INTO expenses (expense_id, customer_id, department_id, amount_cents, cate
     (7, '34b149705a405d7a551ba57b', 3,   42000, 'travel', 'Delta',
         'Client site visit, ATL-SFO', 'payout_failed', 'auto_approved');
 
+-- Receipts. Every seeded expense is over the $25 threshold, so under spec 7.2 each one needs
+-- a receipt or the engine would block it -- a row claiming 'auto_approved' or 'needs_approval'
+-- with no receipt would be asserting a verdict the engine would never have given it.
+-- Expense 3 still ends up blocked, but by the per-expense cap alone, which is the point of it.
+--
+-- Filenames are sha256(file) + extension, exactly how uploads are stored.
+-- services.receipts.install_samples() copies data/sample_receipts/ into the receipts
+-- directory; init_db.py and seed.py both call it, so the files exist before anything
+-- renders them. Regenerate this block if a sample file changes -- the hash is the filename.
+
+UPDATE expenses SET
+    receipt_path = '15627a9de8ac30984df88ff2f91062b9ff9d9dc21a8ecaab3e6ecaf7516a9ca0.svg',
+    receipt_filename = 'figma-invoice.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = '15627a9de8ac30984df88ff2f91062b9ff9d9dc21a8ecaab3e6ecaf7516a9ca0'
+WHERE expense_id = 1;
+
+UPDATE expenses SET
+    receipt_path = 'b893ad3dd5329c0c20f9ffb0ee00fc056a8a3c2246f7138e44a11c2ca96f4c04.svg',
+    receipt_filename = 'olive-garden-dinner.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = 'b893ad3dd5329c0c20f9ffb0ee00fc056a8a3c2246f7138e44a11c2ca96f4c04'
+WHERE expense_id = 2;
+
+UPDATE expenses SET
+    receipt_path = '6328d839d289120d284590f292959b4af1498b73ff39684c6ea647aae028dcbe.svg',
+    receipt_filename = 'apple-workstation.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = '6328d839d289120d284590f292959b4af1498b73ff39684c6ea647aae028dcbe'
+WHERE expense_id = 3;
+
+UPDATE expenses SET
+    receipt_path = 'ae158159379688b04bb6b6817fd561225f9b8c296037b1affd995b4af34fb829.svg',
+    receipt_filename = 'meta-ads-invoice.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = 'ae158159379688b04bb6b6817fd561225f9b8c296037b1affd995b4af34fb829'
+WHERE expense_id = 4;
+
+UPDATE expenses SET
+    receipt_path = '5bfbcb4c3ae327068b13125f6a0ff21364dbd902e15ff57d5cc6454d88d76e44.svg',
+    receipt_filename = 'google-ads-invoice.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = '5bfbcb4c3ae327068b13125f6a0ff21364dbd902e15ff57d5cc6454d88d76e44'
+WHERE expense_id = 5;
+
+UPDATE expenses SET
+    receipt_path = '637e32afda0507b708e145cb477343affd1a32de02abed532c6de3249e90026d.svg',
+    receipt_filename = 'linkedin-ads-invoice.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = '637e32afda0507b708e145cb477343affd1a32de02abed532c6de3249e90026d'
+WHERE expense_id = 6;
+
+UPDATE expenses SET
+    receipt_path = '8b5ce925236e37440176bfcb932115626eaff57e87408c705d6d3747dae6d3d7.svg',
+    receipt_filename = 'delta-itinerary.svg',
+    receipt_mime = 'image/svg+xml',
+    receipt_hash = '8b5ce925236e37440176bfcb932115626eaff57e87408c705d6d3747dae6d3d7'
+WHERE expense_id = 7;
+
+-- ---------------------------------------------------------------------------
+-- 8. The violations those expenses recorded at submission time. Written out rather than
+--    recomputed so the demo shows exactly what the engine said on the day.
+-- ---------------------------------------------------------------------------
 INSERT INTO expense_violations (violation_id, expense_id, rule, severity, message) VALUES
     (1, 2, 'approval_threshold', 'warn',
         '$180.00 is over the $100.00 auto-approve limit for client meals'),

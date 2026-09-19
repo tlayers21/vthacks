@@ -30,11 +30,21 @@ class ExpenseIn(BaseModel):
     category: Category
     merchant: str | None = Field(default=None, max_length=100)
     description: str | None = Field(default=None, max_length=1000)
+    # Preview only. On a real submit the attached file decides this, not the caller
+    has_receipt: bool = False
 
     @field_validator("merchant", "description")
     @classmethod
     def _blank_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value else None
+
+    @field_validator("has_receipt", mode="before")
+    @classmethod
+    def _checkbox_to_bool(cls, value):
+        # Multipart sends strings, so "false" would otherwise be truthy
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return value
 
 
 class DecisionIn(BaseModel):

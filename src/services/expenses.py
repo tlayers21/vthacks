@@ -22,8 +22,10 @@ def submit_expense(
     category: str,
     merchant: str | None = None,
     description: str | None = None,
+    receipt=None,
     nessie=None,
 ) -> dict:
+    """`receipt` is a services.receipts.StoredReceipt, already written to disk."""
     if not can_submit(actor):
         raise Forbidden("this account cannot submit expenses")
 
@@ -34,12 +36,15 @@ def submit_expense(
         category=category,
         merchant=merchant,
         description=description,
+        has_receipt=receipt is not None,
     )
     result = preview_expense(conn, draft)
     status = DECISION_TO_STATUS[result.decision]
 
+    # A blocked expense keeps its receipt, the same way it keeps its violations: the
+    # submitter has to be able to see what they actually sent.
     with transaction(conn):
-        expense_id = expense_db.insert_expense(conn, draft, result, status)
+        expense_id = expense_db.insert_expense(conn, draft, result, status, receipt)
 
     # Outside the transaction above: never hold a SQLite write lock across a network call.
     # A blocked expense keeps its row -- the submitter needs to see why it was refused.

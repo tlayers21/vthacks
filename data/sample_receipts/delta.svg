@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="370" viewBox="0 0 360 370">
+  <style>
+    text { font-family: "Courier New", monospace; fill: #1a1a1a; }
+    .h { font-size: 19px; font-weight: bold; letter-spacing: 1px; }
+    .s { font-size: 11px; fill: #666; }
+    .i { font-size: 13px; }
+    .r { text-anchor: end; }
+    .t { font-size: 15px; font-weight: bold; }
+    .f { font-size: 10px; fill: #888; }
+  </style>
+  <rect width="360" height="370" fill="#fffdf8"/>
+  <rect x="8" y="8" width="344" height="354" fill="#fff" stroke="#e2ded4"/>
+  <text x="180" y="48" class="h" text-anchor="middle">DELTA AIR LINES</text>
+  <text x="180" y="66" class="s" text-anchor="middle">Hartsfield-Jackson ATL</text>
+  <text x="180" y="82" class="s" text-anchor="middle">Sept 09, 2026  6:15 AM</text>
+  <line x1="24" y1="100" x2="336" y2="100" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="118" class="s">ITEM</text><text x="336" y="118" class="s r">AMOUNT</text>
+  <text x="24" y="132" class="i">ATL -> SFO  Main Cabin</text><text x="336" y="132" class="i r">$318.00</text>
+  <text x="24" y="154" class="i">SFO -> ATL  Main Cabin</text><text x="336" y="154" class="i r">$62.40</text>
+  <text x="24" y="176" class="i">Seat selection</text><text x="336" y="176" class="i r">$19.00</text>
+  <text x="24" y="198" class="i">Checked bag</text><text x="336" y="198" class="i r">$20.60</text>
+  <line x1="24" y1="224" x2="336" y2="224" stroke="#ddd" stroke-dasharray="3 3"/>
+  <text x="24" y="248" class="i">Subtotal</text><text x="336" y="248" class="i r">$383.70</text>
+  <text x="24" y="270" class="i">Tax</text><text x="336" y="270" class="i r">$36.30</text>
+  <line x1="24" y1="282" x2="336" y2="282" stroke="#333"/>
+  <text x="24" y="306" class="t">TOTAL</text><text x="336" y="306" class="t r">$420.00</text>
+  <text x="180" y="334" class="f" text-anchor="middle">AMEX ****1008  APPROVED</text>
+  <text x="180" y="352" class="f" text-anchor="middle">*** SAMPLE RECEIPT - NOT A REAL TRANSACTION ***</text>
+</svg>
