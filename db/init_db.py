@@ -1,10 +1,13 @@
 import sqlite3
 from pathlib import Path
+import os
 
 DB_PATH = Path("app.db")
 SQL_DIR = Path(__file__).parent
 
 def init_db(path=DB_PATH):
+    if os.path.exists(path):
+        os.remove(path)
     conn = sqlite3.connect(path)
     try:
         for name in ("schema.sql", "seed.sql"):
