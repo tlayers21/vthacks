@@ -130,7 +130,8 @@
 
 
 {% macro category_chip(name) %}
-    <span class="chip">{{ name }}</span>
+    {#- Stored lower-case; capitalized here so the value and its label never diverge -#}
+    <span class="chip">{{ name | title }}</span>
 {% endmacro %}
 
 

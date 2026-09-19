@@ -79,7 +79,7 @@
             <select id="category-filter" class="select ml-auto sm:w-44">
                 <option value="">All categories</option>
                 {% for category in categories %}
-                    <option value="{{ category }}">{{ category }}</option>
+                    <option value="{{ category }}">{{ category | title }}</option>
                 {% endfor %}
             </select>
         </div>

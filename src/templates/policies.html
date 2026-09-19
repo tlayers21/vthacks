@@ -62,7 +62,7 @@
                         <tr data-category="{{ category }}"
                             data-override="{{ 'true' if category in overrides else 'false' }}">
                             <td>
-                                <span class="font-medium">{{ category }}</span>
+                                <span class="font-medium">{{ category | title }}</span>
                                 <span class="badge tone-brand ml-1.5 {% if category not in overrides %}hidden{% endif %}"
                                       data-badge><span class="badge-dot"></span>override</span>
                             </td>

@@ -121,7 +121,7 @@
             <ul class="mt-4 flex flex-col gap-3">
                 {% for row in categories_spend %}
                     <li class="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto]">
-                        <span class="truncate text-sm text-ink-soft" title="{{ row.category }}">{{ row.category }}</span>
+                        <span class="truncate text-sm text-ink-soft" title="{{ row.category | title }}">{{ row.category | title }}</span>
                         <span class="block border-l border-line py-0.5 pl-px">
                             {#- min-width keeps a rounding-error-sized category visible as a mark -#}
                             <span class="block h-2.5 min-w-[3px] rounded-r bg-brand"

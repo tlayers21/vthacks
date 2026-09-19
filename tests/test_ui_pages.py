@@ -113,9 +113,10 @@ def test_switching_to_an_unknown_user_is_refused(client):
 def test_finance_page_breaks_spend_down_by_category(client, sign_in):
     sign_in("dana")
     body = client.get("/finance").get_data(as_text=True)
-    # Marketing is the seeded over-budget category, so it leads the breakdown
+    # Marketing is the seeded over-budget category, so it leads the breakdown.
+    # Categories are stored lower-case and capitalized for display only
     assert "Spend by category" in body
-    assert "marketing" in body
+    assert "Marketing" in body
 
 
 def test_policy_page_marks_a_department_override(client, sign_in):

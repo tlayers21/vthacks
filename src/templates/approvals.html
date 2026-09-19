@@ -65,7 +65,7 @@
                     </div>
                     <div class="mt-1.5">{{ receipt_check_pill(expense.receipt_check) }}</div>
 
-                    <p class="mt-1 font-medium">{{ expense.merchant or expense.category }}</p>
+                    <p class="mt-1 font-medium">{{ expense.merchant or expense.category | title }}</p>
                     <p class="mt-0.5 text-xs text-muted">
                         {{ expense.submitter_name }} &middot; {{ expense.department_name }}
                         &middot; {{ expense.submitted_at[:10] }}
