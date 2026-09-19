@@ -12,6 +12,14 @@ CREATE TABLE accounts (
     FOREIGN KEY (customer_id) REFERENCES customers(nessie_id)
 );
 
+CREATE TABLE departments (
+    department_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    account_id INT NOT NULL,
+    FOREIGN KEY (account_id) REFERENCES accounts(nessie_id)
+);
+
 CREATE TABLE budget_requests (
     request_id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
