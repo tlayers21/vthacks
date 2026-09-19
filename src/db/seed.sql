@@ -175,52 +175,52 @@ INSERT INTO expenses (expense_id, customer_id, department_id, amount_cents, cate
 -- renders them. Regenerate this block if a sample file changes -- the hash is the filename.
 
 UPDATE expenses SET
-    receipt_path = '15627a9de8ac30984df88ff2f91062b9ff9d9dc21a8ecaab3e6ecaf7516a9ca0.svg',
+    receipt_path = 'c8fb99c070f0b6751ea1defc020d8418acdcbb9573b0258d069a61b0fcbd1d2c.svg',
     receipt_filename = 'figma-invoice.svg',
     receipt_mime = 'image/svg+xml',
-    receipt_hash = '15627a9de8ac30984df88ff2f91062b9ff9d9dc21a8ecaab3e6ecaf7516a9ca0'
+    receipt_hash = 'c8fb99c070f0b6751ea1defc020d8418acdcbb9573b0258d069a61b0fcbd1d2c'
 WHERE expense_id = 1;
 
 UPDATE expenses SET
-    receipt_path = 'b893ad3dd5329c0c20f9ffb0ee00fc056a8a3c2246f7138e44a11c2ca96f4c04.svg',
+    receipt_path = '40147d97866e70ce026738816d867f68c6793bda431483549de1eb7134cef2eb.svg',
     receipt_filename = 'olive-garden-dinner.svg',
     receipt_mime = 'image/svg+xml',
-    receipt_hash = 'b893ad3dd5329c0c20f9ffb0ee00fc056a8a3c2246f7138e44a11c2ca96f4c04'
+    receipt_hash = '40147d97866e70ce026738816d867f68c6793bda431483549de1eb7134cef2eb'
 WHERE expense_id = 2;
 
 UPDATE expenses SET
-    receipt_path = '6328d839d289120d284590f292959b4af1498b73ff39684c6ea647aae028dcbe.svg',
+    receipt_path = '2cac6c659e2b4cd2c0a1da83edb8265fa5e0877cde7ff640ea961ea3d06bfd5e.svg',
     receipt_filename = 'apple-workstation.svg',
     receipt_mime = 'image/svg+xml',
-    receipt_hash = '6328d839d289120d284590f292959b4af1498b73ff39684c6ea647aae028dcbe'
+    receipt_hash = '2cac6c659e2b4cd2c0a1da83edb8265fa5e0877cde7ff640ea961ea3d06bfd5e'
 WHERE expense_id = 3;
 
 UPDATE expenses SET
-    receipt_path = 'ae158159379688b04bb6b6817fd561225f9b8c296037b1affd995b4af34fb829.svg',
+    receipt_path = '53fbe6272dedc675f845c7b6c0435dbf4418653eb72f6bc4a587fbe78394b802.svg',
     receipt_filename = 'meta-ads-invoice.svg',
     receipt_mime = 'image/svg+xml',
-    receipt_hash = 'ae158159379688b04bb6b6817fd561225f9b8c296037b1affd995b4af34fb829'
+    receipt_hash = '53fbe6272dedc675f845c7b6c0435dbf4418653eb72f6bc4a587fbe78394b802'
 WHERE expense_id = 4;
 
 UPDATE expenses SET
-    receipt_path = '5bfbcb4c3ae327068b13125f6a0ff21364dbd902e15ff57d5cc6454d88d76e44.svg',
+    receipt_path = '3229c0fdafddd3fb0acb86dc6e97e23d539e296a5f811a6bf50a59213e156c0e.svg',
     receipt_filename = 'google-ads-invoice.svg',
     receipt_mime = 'image/svg+xml',
-    receipt_hash = '5bfbcb4c3ae327068b13125f6a0ff21364dbd902e15ff57d5cc6454d88d76e44'
+    receipt_hash = '3229c0fdafddd3fb0acb86dc6e97e23d539e296a5f811a6bf50a59213e156c0e'
 WHERE expense_id = 5;
 
 UPDATE expenses SET
-    receipt_path = '637e32afda0507b708e145cb477343affd1a32de02abed532c6de3249e90026d.svg',
+    receipt_path = '55c2dff47f71448a1ead333882b646606ff094ce4c2e0edabcc528f4dd004f4c.svg',
     receipt_filename = 'linkedin-ads-invoice.svg',
     receipt_mime = 'image/svg+xml',
-    receipt_hash = '637e32afda0507b708e145cb477343affd1a32de02abed532c6de3249e90026d'
+    receipt_hash = '55c2dff47f71448a1ead333882b646606ff094ce4c2e0edabcc528f4dd004f4c'
 WHERE expense_id = 6;
 
 UPDATE expenses SET
-    receipt_path = '8b5ce925236e37440176bfcb932115626eaff57e87408c705d6d3747dae6d3d7.svg',
+    receipt_path = 'd2977ca162764a790e1968bc103daa443da5c26054f3c72a4f37051358c7e5c4.svg',
     receipt_filename = 'delta-itinerary.svg',
     receipt_mime = 'image/svg+xml',
-    receipt_hash = '8b5ce925236e37440176bfcb932115626eaff57e87408c705d6d3747dae6d3d7'
+    receipt_hash = 'd2977ca162764a790e1968bc103daa443da5c26054f3c72a4f37051358c7e5c4'
 WHERE expense_id = 7;
 
 UPDATE expenses SET

@@ -1,0 +1,8 @@
+# The receipt branch arrived with CRLF on 17 files, which left git no common lines to
+# 3-way merge. Normalize on the way in so that cannot happen again.
+* text=auto eol=lf
+
+# Sample receipts are content-addressed: seed.sql stores sha256(file) as both receipt_path
+# and receipt_hash, so a line-ending conversion silently breaks every one of them. -text
+# keeps git from ever rewriting these bytes, on any platform.
+data/sample_receipts/*.svg -text
