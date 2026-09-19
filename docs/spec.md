@@ -1,10 +1,10 @@
 # vthacks: technical spec
 
-A company spend-control app. Departments get budgets and per-category policies. Employees submit receipt-backed expenses, managers approve them, and finance manages budgets, policies, and split payments. An AI assistant answers questions scoped to the user's role.
+A company transaction-management app. Departments get budgets. Employees submit receipt-backed expenses, managers approve or reject them, and finance manages department budgets and requests. An AI assistant answers questions scoped to the user's role.
 
 **Nessie (Capital One's mock bank API) moves the money. Our own database stores everything else.**
 
-Not included: inter-company invoices, real authentication (a role switcher is used), native mobile.
+Not included: inter-company invoices, real authentication (a role switcher is used), native mobile, spending policies/limits, split payments.
 
 ## 1. Roles
 
@@ -12,7 +12,7 @@ Not included: inter-company invoices, real authentication (a role switcher is us
 |---|---|---|
 | Employee | Own expenses, own department's budget totals | Submit expenses, upload receipts |
 | Manager | All expenses in their department | Approve or reject, request budget |
-| Finance | Everything | Set policies, decide budget requests, run splits |
+| Finance | Everything | Decide budget requests |
 
 Permissions are enforced in the backend only. User ID, role, and department come from the session, never from the request body or chat text.
 
@@ -67,16 +67,15 @@ vthacks/
 │   │   ├── main.py
 │   │   ├── core/                 config.py, session.py
 │   │   ├── db/                   session.py, seed.py
-│   │   ├── models/               user, department, policy, expense, budget_request,
-│   │   │                         split_rule, transfer, merchant_category,
-│   │   │                         notification, audit_log
+│   │   ├── models/               user, department, expense, budget_request,
+│   │   │                         transfer, notification, audit_log
 │   │   ├── schemas/              request and response models per resource
 │   │   ├── api/
 │   │   │   ├── deps.py           current user, role checks
-│   │   │   └── routes/           auth, expenses, receipts, budgets, policies, splits,
+│   │   │   └── routes/           auth, expenses, receipts, budgets,
 │   │   │                         assistant, transfers, audit, notifications, admin
-│   │   ├── services/             policy_engine, expense_flags, reimbursement,
-│   │   │                         budget_requests, splits, categorization,
+│   │   ├── services/             expense_flags, reimbursement,
+│   │   │                         budget_requests, categorization,
 │   │   │                         permissions, notifications, audit
 │   │   ├── integrations/
 │   │   │   └── nessie/           client.py, mock.py, protocol.py
@@ -92,7 +91,7 @@ vthacks/
 │   │   ├── api/                  generated client
 │   │   ├── pages/                Login.tsx, employee/, manager/, finance/
 │   │   ├── components/           ui/ (shadcn), layout/, expenses/, budgets/,
-│   │   │                         policies/, splits/, transfers/, assistant/, common/
+│   │   │                         transfers/, assistant/, common/
 │   │   ├── hooks/
 │   │   ├── context/              auth
 │   │   ├── lib/                  format, sse, utils
@@ -106,17 +105,16 @@ vthacks/
 
 - **users:** id, name, role, department_id, nessie_customer_id, nessie_account_id
 - **departments:** id, name, monthly_budget, nessie_account_id
-- **policies:** id, department_id, role (optional), category, per_expense_limit, monthly_limit, approval_threshold
-- **expenses:** id, user_id, department_id, amount, merchant, description, expense_date, category, category_source (user|llm), llm_category, llm_confidence, flags (json), status, policy_reason, receipt_path, receipt_hash, receipt_data (json), approver_id, decision_comment, decided_at, nessie_transfer_id
+- **expenses:** id, user_id, department_id, amount, merchant, description, expense_date, category, category_source (user|llm), llm_category, llm_confidence, flags (json), status, receipt_path, receipt_hash, receipt_data (json), approver_id, decision_comment, decided_at, nessie_transfer_id
 - **budget_requests:** id, department_id, requested_by, category, amount, justification, status, decided_by, decision_comment, nessie_transfer_id
-- **split_rules:** id, name, shares (json: department_id and pct, sums to 100)
-- **transfers:** id, kind (allocation|reimbursement|split), from_account, to_account, amount, nessie_id, ref_type, ref_id, status
-- **merchant_categories:** merchant, category, source (rule|user|llm)
+- **transfers:** id, kind (allocation|reimbursement), from_account, to_account, amount, nessie_id, ref_type, ref_id, status
 - **notifications:** id, user_id, message, link, read
 - **audit_log:** id, actor_id, action, entity, entity_id, details (json), ts
 
-Expense statuses: `needs_approval`, `approved`, `rejected`, `paid`, `payout_failed`.
-Categories (fixed enum): travel, food, client meals, software, equipment, marketing, training, office supplies, shipping, other.
+Expense statuses: `needs_approval`, `approved`, `rejected`, `paid`, `payout_failed`. There's no
+policy engine, so every expense goes to `needs_approval` and waits on a manager decision;
+`category` is informational (set by the employee or suggested by the LLM tagger), not
+enforced against any limit.
 
 ## 6. Nessie integration
 
@@ -127,24 +125,9 @@ Categories (fixed enum): travel, food, client meals, software, equipment, market
 
 ## 7. Backend logic
 
-### 7.1 Policy engine (`services/policy_engine.py`)
+### 7.1 Flags (`services/expense_flags.py`)
 
-```python
-def check_expense(e, policy, month_spent):
-    if e.amount > policy.per_expense_limit:
-        return "rejected", "Over per-expense limit"
-    if month_spent + e.amount > policy.monthly_limit:
-        return "rejected", "Exceeds monthly limit"
-    if e.amount > policy.approval_threshold:
-        return "needs_approval", "Manager approval required"
-    return "approved", "Within policy"
-```
-
-Policy lookup: department + role + category, falling back to department + category. Monthly spend counts `approved` and `paid` expenses.
-
-### 7.2 Flags (`services/expense_flags.py`)
-
-Shown to the approver; they don't block submission except where noted.
+Informational only, shown to the approver; they don't block submission except where noted.
 - Receipt total differs from the entered amount
 - Receipt older than 30 days
 - Consistency check failed (category or note contradicts receipt items)
@@ -152,22 +135,17 @@ Shown to the approver; they don't block submission except where noted.
 - Duplicate (same receipt hash, or same merchant, amount, and date)
 - Missing receipt on an expense over $25 (blocks submission)
 
-### 7.3 Reimbursement flow (`services/reimbursement.py`)
+### 7.2 Reimbursement flow (`services/reimbursement.py`)
 
 1. Employee drops in a receipt. `POST /receipts/parse` extracts merchant, total, date, and items and pre-fills the form.
 2. `POST /expenses/suggest-category` pre-fills the category. The employee confirms or changes it. Choosing "other" requires a note.
-3. `POST /expenses` computes flags, runs the policy engine, and writes the audit log.
-4. Result: auto-approved (paid immediately), sent to the manager, or rejected with a reason.
-5. Manager approves or rejects with an optional comment. Approval triggers a department-to-employee Nessie transfer, then status `paid`.
-6. The submitter and approver are notified at each step.
+3. `POST /expenses` computes flags and writes the audit log. Status is always `needs_approval` — there's no policy engine to auto-approve or auto-reject.
+4. Manager approves or rejects with an optional comment. Approval triggers a department-to-employee Nessie transfer, then status `paid`. Rejection requires a reason.
+5. The submitter and approver are notified at each step.
 
-### 7.4 Budget requests (`services/budget_requests.py`)
+### 7.3 Budget requests (`services/budget_requests.py`)
 
 A manager submits category, amount, and justification. Finance sees it next to the department's current spend. Approving triggers a corporate-to-department transfer and raises `monthly_budget`. Denying requires a reason.
-
-### 7.5 Splits (`services/splits.py`)
-
-`POST /splits/execute` takes a total, a vendor account, and a split rule. It checks shares sum to 100, then sends one transfer per department to the vendor and logs each. Any rounding remainder goes to the largest share.
 
 ## 8. LLM layer
 
@@ -187,14 +165,14 @@ class TagExpense(dspy.Signature):
 - **Tagger:** merchant cache, then keyword rules, then the DSPy module. Confidence under 0.7 shows the user the top choices. Invalid output falls back to `other` and is flagged.
 - **Receipt reader:** image in; merchant, total, date, and line items out. Results cached by file hash.
 - **Consistency check:** employee category, note, and receipt items in; `consistent` and `reason` out.
-- **Learning:** user-corrected tags update `merchant_categories` and become training examples. `optimize.py` compiles the tagger with `BootstrapFewShot` and reports accuracy before and after on a held-out set.
+- **Learning:** user-corrected tags become training examples. `optimize.py` compiles the tagger with `BootstrapFewShot` and reports accuracy before and after on a held-out set.
 
 ### 8.2 Assistant (LangGraph, `llm/assistant/`)
 
 Graph:
 1. **route:** classify the question as numbers, text, or action.
 2. **SQL path:** generate SQL, validate, run scoped and read-only. Retry once on error.
-3. **Text path:** retrieve justifications and policies, filtered by department.
+3. **Text path:** retrieve budget-request justifications, filtered by department.
 4. **Action path:** propose the action and pause for explicit user confirmation before any money moves.
 5. **answer:** respond only from returned rows or retrieved text. Stream tokens and attach the SQL, row count, and sources.
 
@@ -217,9 +195,6 @@ POST /expenses                    GET  /expenses?scope=mine|dept|all
 POST /expenses/{id}/decision      POST /expenses/{id}/retry-payout
 POST /budget-requests             GET  /budget-requests
 POST /budget-requests/{id}/decision
-GET  /policies                    PUT  /policies/{id}
-GET  /split-rules                 POST /split-rules
-POST /splits/execute
 POST /assistant/ask (SSE)         POST /assistant/confirm
 GET  /transfers                   GET  /audit
 GET  /notifications               POST /notifications/read
@@ -234,7 +209,7 @@ The OpenAPI schema is the contract. The frontend client is generated from it.
 
 **Employee**
 - Dashboard: budget bars by category
-- New expense: receipt dropzone, pre-filled form, live flags, policy preview
+- New expense: receipt dropzone, pre-filled form, live flags
 - My expenses: list with status and manager comments
 
 **Manager**
@@ -246,8 +221,6 @@ The OpenAPI schema is the contract. The frontend client is generated from it.
 - Overview: totals, department comparison, over-budget highlight
 - Department detail
 - Budget requests: justification, Deny and Approve-and-transfer
-- Policies: editable table
-- Splits: rule builder and preview
 - Transfers and audit log
 
 **Assistant panel:** streaming answers, SQL and sources disclosed under each answer, confirmation card for actions, suggested question chips.
@@ -258,7 +231,7 @@ The OpenAPI schema is the contract. The frontend client is generated from it.
 
 ## 11. Seed data and demo
 
-Seed 4 departments, about 12 users, realistic merchants (Delta, Figma, Olive Garden, AWS, Staples), and policies per category. Plant:
+Seed 4 departments, about 12 users, and realistic merchants (Delta, Figma, Olive Garden, AWS, Staples). Plant:
 - a $180 team dinner that needs approval
 - a receipt whose total doesn't match the form
 - an old receipt
@@ -273,13 +246,12 @@ Keep 3 or 4 sample receipts in `data/sample_receipts/` and cache their parsed re
 3. Switch to finance, see the dashboard update and the transfer log.
 4. Ask the assistant the same question as finance and as an employee to show scoping.
 5. Approve Marketing's budget request.
-6. Run a split.
 
 Record a Playwright backup video.
 
 ## 12. Testing
 
-- **Unit:** policy engine, flags, split math, permissions, SQL guard (DELETE, multiple statements, forbidden tables, `WITH` overrides)
+- **Unit:** flags, permissions, SQL guard (DELETE, multiple statements, forbidden tables, `WITH` overrides)
 - **Integration:** full reimbursement flow against mock Nessie
 - **Permissions:** every role against every endpoint and assistant question
 - **Evals (`make eval`):** tagging accuracy before and after optimization, receipt field accuracy, assistant SQL correctness on about 30 questions
@@ -313,7 +285,7 @@ Permissions: allow `make`, `uv run`, `npm run`, `git diff`, and the Context7 MCP
 
 **Subagents** (`.claude/agents/`): backend-dev, llm-engineer, frontend-dev, test-writer, security-reviewer (read-only), demo-polisher. Invoke by name.
 
-**Skills** (`.claude/skills/<skill-name>/SKILL.md`): nessie-api (with a `reference.md` of the official Nessie docs), policy-engine, dspy-modules, langgraph-assistant, sql-guardrails, design-system, seed-data. Skills hold project-specific patterns only and tell Claude to fetch current library docs via Context7 first.
+**Skills** (`.claude/skills/<skill-name>/SKILL.md`): nessie-api (with a `reference.md` of the official Nessie docs), dspy-modules, langgraph-assistant, sql-guardrails, design-system, seed-data. Skills hold project-specific patterns only and tell Claude to fetch current library docs via Context7 first.
 
 **Commands** (`.claude/commands/`): `/new-endpoint`, `/add-dspy-module`, `/seed`, `/check`, `/eval`, `/demo-check`, `/review`.
 
@@ -351,11 +323,11 @@ How it's used:
 ## 14. Build order
 
 1. Scaffolding, Claude Code setup, models, mock Nessie, seed script
-2. Policy engine, expense API, permissions
+2. Expense API, permissions
 3. Reimbursement flow end to end, then switch to real Nessie
 4. Employee and manager screens
 5. DSPy tagging and receipt reading with flags
-6. Finance screens, budget requests, policy editor
+6. Finance screens, budget requests
 7. Assistant: SQL path, then text path, then confirmed actions
-8. Splits, audit log, notifications
+8. Audit log, notifications
 9. Evals, polish, demo recording
