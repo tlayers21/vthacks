@@ -18,7 +18,7 @@ Permissions are enforced in the backend only. User ID, role, and department come
 
 ## 2. Stack
 
-- **Backend:** Python 3.12, FastAPI, SQLModel, Alembic, Postgres, uv
+- **Backend:** Python 3.12, Flask
 - **LLM:** DSPy (tagging, receipt reading, consistency check); LangChain + LangGraph (assistant); LangSmith (tracing); pgvector or Chroma (text retrieval)
 - **SQL safety:** sqlglot
 - **Frontend:** React, Vite, TypeScript, Tailwind, shadcn/ui, TanStack Query and Table, Recharts, react-hook-form + zod, Framer Motion, sonner, cmdk. TypeScript client generated from the OpenAPI schema (openapi-typescript).
@@ -29,7 +29,7 @@ Library APIs change quickly, so Claude Code pulls current docs through Context7 
 ## 3. Architecture
 
 ```
-React → FastAPI routes → services → models (Postgres)
+React → Flask routes → services → models (Postgres)
                              ├→ integrations/nessie (real | mock) → Nessie
                              └→ llm/ → LLM API
 ```
